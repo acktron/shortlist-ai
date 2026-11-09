@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
-import { EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge } from './shared';
+import { ArrowRight, FileUp } from 'lucide-react';
+import { EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge, Toast } from './shared';
 
 type Row = { id: string; filename: string; status: string; candidate_id?: string | null; error_message?: string; error_code?: string; duplicate_of?: { filename?: string; candidate_code?: string; application_id?: string } };
 type Batch = { batch_id: string; status: string; total: number; processed: number; failed: number; duplicates: number; needs_review: number; parsed: number; files: Row[] };
 
-export function UploadScreen({ requisitionId, onBack }: { requisitionId: string; onBack: () => void }) {
+export function UploadScreen({ requisitionId, onBack, onNext }: { requisitionId: string; onBack: () => void; onNext: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [batch, setBatch] = useState<Batch | null>(null);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [redacted, setRedacted] = useState<string>();
   const [drawerError, setDrawerError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,7 @@ export function UploadScreen({ requisitionId, onBack }: { requisitionId: string;
     if (invalid) { setError(`${invalid.name}: choose a PDF or DOCX file no larger than 10 MB.`); return; }
     setBusy(true); setError('');
     const form = new FormData(); selected.forEach(file => form.append('files', file));
-    try { setBatch(await api<Batch>(`/requisitions/${requisitionId}/uploads`, { method: 'POST', body: form, headers: {} })); }
+    try { setBatch(await api<Batch>(`/requisitions/${requisitionId}/uploads`, { method: 'POST', body: form, headers: {} })); setMessage(`${selected.length} CV${selected.length === 1 ? '' : 's'} uploaded.`); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Upload failed'); setRetryAction(() => () => { void send(selected); }); }
     finally { setBusy(false); if (input.current) input.current.value = ''; }
   }
@@ -40,14 +42,14 @@ export function UploadScreen({ requisitionId, onBack }: { requisitionId: string;
   }
   async function retryFile(id: string) {
     setBusyFile(id); setError('');
-    try { await api(`/cv-files/${id}/retry`, { method: 'POST' }); await loadLatest(); }
+    try { await api(`/cv-files/${id}/retry`, { method: 'POST' }); await loadLatest(); setMessage('Retry started.'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Retry failed'); setRetryAction(() => () => { void retryFile(id); }); }
     finally { setBusyFile(''); }
   }
   async function retryFailed() {
     if (!batch) return;
     setBusy(true); setError('');
-    try { await api(`/uploads/${batch.batch_id}/retry-failed`, { method: 'POST' }); await loadLatest(); }
+    try { await api(`/uploads/${batch.batch_id}/retry-failed`, { method: 'POST' }); await loadLatest(); setMessage('Retry started for failed files.'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Retry failed'); setRetryAction(() => () => { void retryFailed(); }); }
     finally { setBusy(false); }
   }
@@ -62,21 +64,23 @@ export function UploadScreen({ requisitionId, onBack }: { requisitionId: string;
 
   return <main className="upload-screen">
     <button type="button" className="link" onClick={onBack}>← Scorecard</button>
-    <PageHeader title="Upload CVs" description="Upload up to 500 PDF or DOCX files. Each file can be up to 10 MB." />
+    <PageHeader title="Upload CVs" description="Add PDF or DOCX files to start evidence-backed screening." />
+    {message && <Toast message={message} onDismiss={() => setMessage('')} />}
     <div className={`dropzone ${busy ? 'disabled' : ''}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void send(event.dataTransfer.files); }} onClick={() => !busy && input.current?.click()} role="button" tabIndex={0} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && !busy) input.current?.click(); }}>
       <strong>{busy ? 'Uploading…' : 'Drop files here or choose files'}</strong><span>PDF and DOCX · up to 10 MB each</span>
       <input ref={input} hidden type="file" multiple accept=".pdf,.docx" onChange={event => event.target.files && void send(event.target.files)} />
     </div>
     {error && <ErrorState message={error} retry={retryAction} />}
     {batch && <>
-      <div className="upload-summary"><div className="progress"><div style={{ width: `${batch.total ? (batch.processed / batch.total) * 100 : 0}%` }} /></div><p>{batch.processed} of {batch.total} processed</p><div className="summary-chips"><span>Parsed {batch.parsed}</span><span>Duplicates {batch.duplicates}</span><span>Needs review {batch.needs_review}</span><span>Failed {batch.failed}</span></div></div>
+      <div className="upload-summary"><div className="progress-track" role="progressbar" aria-label="Upload processing progress" aria-valuemin={0} aria-valuemax={batch.total} aria-valuenow={batch.processed}><div className="progress" style={{ width: `${batch.total ? (batch.processed / batch.total) * 100 : 0}%` }} /></div><p>{batch.processed} of {batch.total} files processed</p><div className="summary-chips"><span><b>{batch.parsed}</b> Parsed</span><span><b>{batch.duplicates}</b> Duplicates</span><span><b>{batch.needs_review}</b> Needs review</span><span><b>{batch.failed}</b> Failed</span></div></div>
       {batch.failed > 0 && <button type="button" className="secondary retry-all" disabled={busy} onClick={() => void retryFailed()}>{busy ? 'Retrying…' : 'Retry all failed'}</button>}
+      {batch.status === 'done' && batch.total > batch.failed && <div className="upload-next"><span>{batch.parsed + batch.needs_review + batch.duplicates} files are ready in the candidate list.</span><button type="button" onClick={onNext}>Review ranked candidates <ArrowRight size={16}/></button></div>}
       <div className="upload-table" role="table" aria-label="Uploaded CV files"><div className="upload-head" role="row"><span>File</span><span>Status</span><span>Reason</span><span>Action</span></div>
         {batch.files.map(file => <div className="upload-row" role="row" key={file.id}><span className="filename">{file.filename}</span><span><StatusBadge status={file.status} /></span><small>{file.error_message || file.error_code || (file.duplicate_of ? `Same file as ${file.duplicate_of.filename || file.duplicate_of.candidate_code || 'another CV'}` : '')}</small><span className="upload-actions">{file.status === 'failed' ? <button type="button" className="secondary" disabled={busyFile === file.id} onClick={() => void retryFile(file.id)}>{busyFile === file.id ? 'Retrying…' : 'Retry'}</button> : file.status === 'duplicate' ? file.duplicate_of?.application_id ? <button type="button" className="secondary" onClick={() => window.location.assign(`/recruiter/applications/${file.duplicate_of?.application_id}`)}>Original {file.duplicate_of?.candidate_code}</button> : <span className="muted">{file.duplicate_of?.candidate_code || 'Linked to original'}</span> : file.candidate_id != null && <button type="button" className="secondary" onClick={() => void showRedacted(file.id)}>View redacted text</button>}</span></div>)}
         {batch.files.length === 0 && <EmptyState title="No files in this batch" action={<button type="button" onClick={() => input.current?.click()}>Choose CV files</button>} />}
       </div>
     </>}
-    {!batch && !error && <EmptyState title="No uploads yet" action={<button type="button" onClick={() => input.current?.click()}>Choose CV files</button>} />}
+    {!batch && !error && <EmptyState icon={<FileUp size={22}/>} title="No uploads yet" description="Choose CVs to build a ranked shortlist with evidence." action={<button type="button" onClick={() => input.current?.click()}>Choose CV files</button>} />}
     {(redacted !== undefined || drawerError) && <><button type="button" className="drawer-backdrop" aria-label="Close redacted text" onClick={() => { setRedacted(undefined); setDrawerError(''); }} /><aside className="drawer"><div className="drawer-title"><h2>Redacted text</h2><button type="button" className="secondary" onClick={() => { setRedacted(undefined); setDrawerError(''); }}>Close</button></div>{drawerError ? <ErrorState message={drawerError} retry={() => { if (activeFileId) void showRedacted(activeFileId); }} /> : <pre>{redacted}</pre>}</aside></>}
   </main>;
 }

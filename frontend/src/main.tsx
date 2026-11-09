@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Circle, FileText, Users } from 'lucide-react';
 import { api, login, logout } from './api/client';
-import { EmptyState, ErrorState, PageHeader, ScoreSummary, Skeleton, StatusBadge, type ScoreSummaryData } from './components/shared';
+import { EmptyState, ErrorState, PageHeader, ScoreSummary, Skeleton, StatusBadge, Toast, type ScoreSummaryData } from './components/shared';
 import { UploadScreen } from './components/upload';
 import './styles.css';
 
@@ -23,7 +24,7 @@ type Draft = {
 type Criterion = { id: string; kind: 'must_skill' | 'nice_skill' | 'experience' | 'notice' | 'ctc' | 'location'; label: string; weight: number; params: Record<string, unknown> };
 type ScorecardData = { version: number; criteria: Criterion[]; ai_draft: Draft; ai_confidence: Record<string, string> };
 type Counts = { candidates: number; strong_matches: number; submitted: number; uploads: number };
-const accounts = [['Recruiter', 'recruiter@companya.demo'], ['Delivery head', 'head@companya.demo'], ['Meridian client', 'priya@meridianbank.demo'], ['Kestrel client', 'rahul@kestrelit.demo']];
+const accounts = [['Recruiter · Company A', 'recruiter@companya.demo'], ['Delivery head · Company A', 'head@companya.demo'], ['Client · Meridian Bank', 'priya@meridianbank.demo'], ['Client · Kestrel IT', 'rahul@kestrelit.demo']];
 const defaultWeights = { must_skill: 3, nice_skill: 1, experience: 3, notice: 2, ctc: 1, location: 1 };
 const emptyDraft: Draft = { title: '', location: '', experience: {}, must_have_skills: [], nice_to_have_skills: [], notice: {}, ctc: {}, field_confidence: {}, missing_fields: [] };
 function normalizeDraft(value: Partial<Draft> | undefined, fallbackLocation: string): Draft {
@@ -58,7 +59,7 @@ function Login() {
     finally { setLoading(false); }
   }
   function submit(event: FormEvent) { event.preventDefault(); void attemptLogin(); }
-  return <main className="login"><section><div className="brand">Shortlist<span>AI</span></div><h1>Sign in</h1><form onSubmit={submit}>
+  return <main className="login"><section><div className="brand">Shortlist<span>AI</span></div><p className="login-tagline">Fair, explainable resume screening</p><h1>Sign in</h1><form onSubmit={submit}>
     <label>Email<input value={email} onChange={event => setEmail(event.target.value)} type="email" required /></label>
     <label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" required /></label>
     {error && <ErrorState message={error} retry={() => void attemptLogin()} />}
@@ -109,8 +110,8 @@ function Recruiter() {
     finally { setCreating(false); }
   }
   const daysOpen = (createdAt?: string) => createdAt ? Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000)) : '—';
-  return <main><PageHeader title="Requisitions" description="Open a role to review the scorecard, applicants, and pipeline." action={<button type="button" className="req-create-button" onClick={() => { setCreateError(''); setShowCreate(true); }}>New requisition</button>} />
-    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No requisitions yet" action={<button type="button" onClick={() => setShowCreate(true)}>New requisition</button>} /> : <div className="req-grid">{rows.map(req => <button type="button" className="req-card" key={req.id} onClick={() => window.location.assign(`/recruiter/requisitions/${req.id}/scorecard`)}><span className="req-title-row"><strong>{req.title}</strong><StatusBadge status={req.status} /></span><span className="req-location">{req.client_name || 'Client'} · {req.location}</span><span className="req-metrics"><span><b>{req.candidates ?? 0}</b> candidates</span><span><b>{req.strong_matches ?? 0}</b> strong matches</span><span><b>{req.submitted ?? 0}</b> submitted</span><span><b>{daysOpen(req.created_at)}</b> days open</span></span><small>Open requisition workspace</small></button>)}</div>}
+  return <main><PageHeader breadcrumb={<span>Recruiter workspace</span>} title="Requisitions" description="Review roles, candidate matches, and client progress." action={<button type="button" className="req-create-button" onClick={() => { setCreateError(''); setShowCreate(true); }}>New requisition</button>} />
+    {loading ? <Skeleton rows={4} variant="card" /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState icon={<FileText size={22}/>} title="No requisitions yet" description="Create a role to start building a shortlist." action={<button type="button" onClick={() => setShowCreate(true)}>New requisition</button>} /> : <div className="req-grid">{rows.map(req => <button type="button" className="req-card" key={req.id} onClick={() => window.location.assign(`/recruiter/requisitions/${req.id}/scorecard`)}><span className="req-title-row"><strong>{req.title}</strong><StatusBadge status={req.status} /></span><span className="req-location">{req.client_name || 'Client'} · {req.location}</span><span className="req-metrics"><span><small>CVs</small><b>{req.candidates ?? 0}</b></span><span><small>Strong matches</small><b>{req.strong_matches ?? 0}</b></span><span><small>Submitted</small><b>{req.submitted ?? 0}</b></span><span><small>Days open</small><b>{daysOpen(req.created_at)}</b></span></span><span className="req-open">Open requisition <ArrowRight size={15}/></span></button>)}</div>}
     {showCreate && <div className="modal-backdrop"><form className="modal-card" onSubmit={event => { event.preventDefault(); void createRequisition(); }}><div className="modal-heading"><h2>New requisition</h2><button type="button" className="link" onClick={() => setShowCreate(false)}>Close</button></div>
       <label>Client<select required value={draft.client_id} onChange={event => setDraft({ ...draft, client_id: event.target.value })}><option value="">Choose a client</option>{clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
       <label>Job title<input required minLength={2} maxLength={200} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} /></label>
@@ -122,10 +123,12 @@ function Recruiter() {
   </main>;
 }
 
-function HubTabs({ req, counts, tab }: { req: Req; counts: Counts; tab: string }) {
+function HubTabs({ req, counts, tab, scorecardReady }: { req: Req; counts: Counts; tab: string; scorecardReady: boolean }) {
   const nav = useNavigate();
   const tabs = [['scorecard', 'Scorecard', ''], ['upload', 'Upload CVs', ` ${counts.uploads}`], ['candidates', 'Candidates', ` ${counts.candidates}`], ['pipeline', 'Pipeline', ` ${counts.submitted}`]];
-  return <><PageHeader title={req.title} description={`${req.client_name || 'Client'} · ${req.location}`} /><nav className="tabs">{tabs.map(([key, label, count]) => <button type="button" className={tab === key ? 'active' : ''} onClick={() => nav(`/recruiter/requisitions/${req.id}/${key}`)} key={key}>{label}{count && <span className="tab-count">{count.trim()}</span>}</button>)}</nav></>;
+  const completed = [scorecardReady, counts.uploads > 0, counts.submitted > 0, counts.submitted > 0];
+  const active = scorecardReady ? counts.uploads > 0 ? counts.submitted > 0 ? 3 : counts.candidates > 0 ? 2 : 1 : 1 : 0;
+  return <><PageHeader breadcrumb={<><button type="button" className="breadcrumb-link" onClick={() => nav('/recruiter')}>Requisitions</button><span>/</span><span>{req.title}</span></>} title={req.title} description={`${req.client_name || 'Client'} · ${req.location}`} action={<StatusBadge status={req.status}/>} /><nav className="tabs" aria-label="Requisition sections">{tabs.map(([key, label, count]) => <button type="button" className={tab === key ? 'active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => nav(`/recruiter/requisitions/${req.id}/${key}`)} key={key}>{label}{count && <span className="tab-count">{count.trim()}</span>}</button>)}</nav><ol className="progress-steps" aria-label="Requisition progress">{['Scorecard','CVs uploaded','Reviewed','Submitted'].map((label,index)=><li className={`${completed[index]?'complete':''} ${active===index?'current':''}`} key={label}>{completed[index]?<Check size={14}/>:<Circle size={12}/>}<span>{label}</span></li>)}</ol></>;
 }
 
 function confirmField(field: string, value: unknown, jd: string): 'confirmed' | 'empty' | 'missing' {
@@ -169,6 +172,7 @@ function Scorecard({ req, counts }: { req: Req; counts: Counts }) {
   const nav = useNavigate(); const tab = window.location.pathname.split('/').pop() || 'scorecard';
   const [draft, setDraft] = useState<Draft>(emptyDraft); const [criteria, setCriteria] = useState<Criterion[]>([]); const [version, setVersion] = useState<number>();
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [message, setMessage] = useState('');
+  const [savedOnce, setSavedOnce] = useState(false);
   const [retryAction, setRetryAction] = useState<() => void>(() => () => {});
   const jd = req.jd_text;
   useEffect(() => {
@@ -190,8 +194,8 @@ function Scorecard({ req, counts }: { req: Req; counts: Counts }) {
       { id: 'location', kind: 'location', label: 'Location', weight: defaultWeights.location, params: {} }];
   }
   async function extract() {
-    setBusy(true); setError(''); setMessage('');
-    try { const response = await api<{ draft: Draft; warning?: string | null }>(`/requisitions/${req.id}/scorecard/extract`, { method: 'POST' }); setDraft(response.draft); setCriteria(fromDraft(response.draft)); if (response.warning) setMessage(`Automatic extraction needs review: ${response.warning}`); }
+    setBusy(true); setError(''); setMessage(''); setSavedOnce(false);
+    try { const response = await api<{ draft: Draft; warning?: string | null }>(`/requisitions/${req.id}/scorecard/extract`, { method: 'POST' }); setDraft(response.draft); setCriteria(fromDraft(response.draft)); if (response.warning) setMessage(`Automatic extraction needs review: ${response.warning}`); else setMessage('Job description extracted. Review the fields before saving.'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Scorecard extraction failed'); setRetryAction(() => () => { void extract(); }); }
     finally { setBusy(false); }
   }
@@ -200,7 +204,7 @@ function Scorecard({ req, counts }: { req: Req; counts: Counts }) {
     const nextCriteria = criteria.map(item => item.kind === 'experience' ? { ...item, params: draft.experience } : item.kind === 'notice' ? { ...item, params: draft.notice } : item.kind === 'ctc' ? { ...item, params: draft.ctc } : item);
     try {
       const result = await api<ScorecardData>(`/requisitions/${req.id}/scorecard`, { method: 'PUT', body: JSON.stringify({ criteria: nextCriteria, ai_draft: draft, ai_confidence: draft.field_confidence }) });
-      setCriteria(result.criteria); const hadPrevious = version !== undefined; setVersion(result.version); setMessage(`Saved scorecard version ${result.version}.`);
+      setCriteria(result.criteria); const hadPrevious = version !== undefined; setVersion(result.version); setSavedOnce(true); setMessage(`Scorecard saved as version ${result.version}.`);
       if (hadPrevious && window.confirm(`Scorecard changed. Rescore ${counts.candidates} candidates now?`)) {
         const scored = await api<{ reprocessed: number }>(`/requisitions/${req.id}/rescore`, { method: 'POST' });
         setMessage(`Saved version ${result.version}; rescored ${scored.reprocessed} CVs.`);
@@ -208,61 +212,80 @@ function Scorecard({ req, counts }: { req: Req; counts: Counts }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to save scorecard'); setRetryAction(() => () => { void save(); }); }
     finally { setBusy(false); }
   }
-  const updateCriterion = (id: string, next: Partial<Criterion>) => setCriteria(current => current.map(item => item.id === id ? { ...item, ...next } : item));
-  const updateKindWeight = (kind: Criterion['kind'], delta: number) => setCriteria(current => current.map(item => item.kind === kind ? { ...item, weight: Math.min(5, Math.max(1, item.weight + delta)) } : item));
-  const addSkill = (kind: 'must_skill' | 'nice_skill') => { const label = window.prompt('Skill name'); if (!label?.trim()) return; setCriteria(current => [...current, { id: `${kind}-${Date.now()}`, kind, label: label.trim(), weight: defaultWeights[kind], params: {} }]); };
-  const updateLocationCriterion = (value: string) => setCriteria(current => current.map(item => item.kind === 'location' ? { ...item, label: 'Location', params: { value } } : item));
-  if (tab === 'upload') return <><HubTabs req={req} counts={counts} tab={tab} /><UploadScreen requisitionId={req.id} onBack={() => nav(`/recruiter/requisitions/${req.id}/scorecard`)} /></>;
-  if (tab === 'candidates') return <><HubTabs req={req} counts={counts} tab={tab} /><CandidateList id={req.id} /></>;
-  if (tab === 'pipeline') return <><HubTabs req={req} counts={counts} tab={tab} /><PipelineBoard requisitionId={req.id} /></>;
-  return <><HubTabs req={req} counts={counts} tab={tab} /><main>
+  const updateCriterion = (id: string, next: Partial<Criterion>) => { setSavedOnce(false); setCriteria(current => current.map(item => item.id === id ? { ...item, ...next } : item)); };
+  const updateKindWeight = (kind: Criterion['kind'], delta: number) => { setSavedOnce(false); setCriteria(current => current.map(item => item.kind === kind ? { ...item, weight: Math.min(5, Math.max(1, item.weight + delta)) } : item)); };
+  const addSkill = (kind: 'must_skill' | 'nice_skill') => { const label = window.prompt('Skill name'); if (!label?.trim()) return; setSavedOnce(false); setCriteria(current => [...current, { id: `${kind}-${Date.now()}`, kind, label: label.trim(), weight: defaultWeights[kind], params: {} }]); };
+  const updateLocationCriterion = (value: string) => { setSavedOnce(false); setCriteria(current => current.map(item => item.kind === 'location' ? { ...item, label: 'Location', params: { value } } : item)); };
+  const scorecardReady = version !== undefined;
+  if (tab === 'upload') return <><HubTabs req={req} counts={counts} tab={tab} scorecardReady={scorecardReady} />{loading ? <main><Skeleton rows={3} variant="card" /></main> : !scorecardReady ? <main><EmptyState icon={<FileText size={22}/>} title="Set up the scorecard first" description="Define the role criteria before uploading CVs." action={<button type="button" onClick={() => nav(`/recruiter/requisitions/${req.id}/scorecard`)}>Set up scorecard</button>} /></main> : <UploadScreen requisitionId={req.id} onBack={() => nav(`/recruiter/requisitions/${req.id}/scorecard`)} onNext={() => nav(`/recruiter/requisitions/${req.id}/candidates`)} />}</>;
+  if (tab === 'candidates') return <><HubTabs req={req} counts={counts} tab={tab} scorecardReady={scorecardReady} /><CandidateList id={req.id} /></>;
+  if (tab === 'pipeline') return <><HubTabs req={req} counts={counts} tab={tab} scorecardReady={scorecardReady} /><PipelineBoard requisitionId={req.id} /></>;
+  return <><HubTabs req={req} counts={counts} tab={tab} scorecardReady={scorecardReady} /><main>
     {loading ? <Skeleton rows={6} /> : error ? <ErrorState message={error} retry={() => window.location.reload()} /> : <>
-      <div className="card scorecard-card"><div className="scorecard-actions"><div><h2>Job description</h2><p className="muted">Confirm each field against the original JD before saving.</p></div><button type="button" disabled={busy} onClick={() => void extract()}>{busy ? 'Working…' : 'Extract with AI'}</button></div>
+      <div className="card scorecard-card"><div className="scorecard-actions"><div><h2>Job description</h2><p className="muted">Confirm each field against the original JD before saving.</p></div><button type="button" className="secondary" disabled={busy} onClick={() => void extract()}>{busy ? 'Working…' : 'Extract with AI'}</button></div>
         <textarea className="jd" value={jd} readOnly aria-label="Job description" />
-        {message && <p className="success-message">{message}</p>}{error && <ErrorState message={error} retry={retryAction} />}
+        {message && <Toast message={message} onDismiss={() => setMessage('')} />}{error && <ErrorState message={error} retry={retryAction} />}
         <div className="scorecard-fields">
-          <label>Location<input value={draft.location} onChange={event => { setDraft({ ...draft, location: event.target.value }); updateLocationCriterion(event.target.value); }} />{fieldState('Location', confirmField('location', draft.location, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'location')?.weight || 1} onChange={delta => updateKindWeight('location', delta)} /></label>
-          <label>Minimum experience (years)<input type="number" min="0" max="50" step="0.5" value={draft.experience.min_years ?? ''} onChange={event => setNumeric('experience.min_years', event.target.value)} />{fieldState('Experience', confirmField('experience_min', draft.experience.min_years, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'experience')?.weight || 3} onChange={delta => updateKindWeight('experience', delta)} /></label>
-          <label>Maximum experience (years)<input type="number" min="0" max="50" step="0.5" value={draft.experience.max_years ?? ''} onChange={event => setNumeric('experience.max_years', event.target.value)} />{fieldState('Experience', confirmField('experience_max', draft.experience.max_years, jd))}</label>
-          <label>Notice limit (days)<input type="number" min="0" max="180" value={draft.notice.max_days ?? ''} onChange={event => setNumeric('notice.max_days', event.target.value)} />{fieldState('Notice', confirmField('notice', draft.notice.max_days, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'notice')?.weight || 2} onChange={delta => updateKindWeight('notice', delta)} /></label>
-          <label>CTC limit (LPA)<input type="number" min="0" max="500" step="0.5" value={draft.ctc.max_lpa ?? ''} onChange={event => setNumeric('ctc.max_lpa', event.target.value)} />{fieldState('CTC', confirmField('ctc', draft.ctc.max_lpa, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'ctc')?.weight || 1} onChange={delta => updateKindWeight('ctc', delta)} /></label>
+          <label>Location<input value={draft.location} onChange={event => { setSavedOnce(false); setDraft({ ...draft, location: event.target.value }); updateLocationCriterion(event.target.value); }} />{fieldState('Location', confirmField('location', draft.location, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'location')?.weight || 1} onChange={delta => updateKindWeight('location', delta)} /></label>
+          <label>Minimum experience (years)<input type="number" min="0" max="50" step="0.5" value={draft.experience.min_years ?? ''} onChange={event => { setSavedOnce(false); setNumeric('experience.min_years', event.target.value); }} />{fieldState('Experience', confirmField('experience_min', draft.experience.min_years, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'experience')?.weight || 3} onChange={delta => updateKindWeight('experience', delta)} /></label>
+          <label>Maximum experience (years)<input type="number" min="0" max="50" step="0.5" value={draft.experience.max_years ?? ''} onChange={event => { setSavedOnce(false); setNumeric('experience.max_years', event.target.value); }} />{fieldState('Experience', confirmField('experience_max', draft.experience.max_years, jd))}</label>
+          <label>Notice limit (days)<input type="number" min="0" max="180" value={draft.notice.max_days ?? ''} onChange={event => { setSavedOnce(false); setNumeric('notice.max_days', event.target.value); }} />{fieldState('Notice', confirmField('notice', draft.notice.max_days, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'notice')?.weight || 2} onChange={delta => updateKindWeight('notice', delta)} /></label>
+          <label>CTC limit (LPA)<input type="number" min="0" max="500" step="0.5" value={draft.ctc.max_lpa ?? ''} onChange={event => { setSavedOnce(false); setNumeric('ctc.max_lpa', event.target.value); }} />{fieldState('CTC', confirmField('ctc', draft.ctc.max_lpa, jd))}<WeightStepper weight={criteria.find(item => item.kind === 'ctc')?.weight || 1} onChange={delta => updateKindWeight('ctc', delta)} /></label>
         </div>
-        <SkillCriterionList kind="must_skill" criteria={criteria.filter(item => item.kind === 'must_skill')} onChange={updateCriterion} onAdd={() => addSkill('must_skill')} onRemove={id => setCriteria(current => current.filter(item => item.id !== id))} />
-        <SkillCriterionList kind="nice_skill" criteria={criteria.filter(item => item.kind === 'nice_skill')} onChange={updateCriterion} onAdd={() => addSkill('nice_skill')} onRemove={id => setCriteria(current => current.filter(item => item.id !== id))} />
-        <div className="form-footer"><span className="muted">{version ? `Editing version ${version}; saving creates a new version.` : 'Unsaved scorecard'}</span><button type="button" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save scorecard'}</button></div>
+        <SkillCriterionList kind="must_skill" criteria={criteria.filter(item => item.kind === 'must_skill')} onChange={updateCriterion} onAdd={() => addSkill('must_skill')} onRemove={id => { setSavedOnce(false); setCriteria(current => current.filter(item => item.id !== id)); }} />
+        <SkillCriterionList kind="nice_skill" criteria={criteria.filter(item => item.kind === 'nice_skill')} onChange={updateCriterion} onAdd={() => addSkill('nice_skill')} onRemove={id => { setSavedOnce(false); setCriteria(current => current.filter(item => item.id !== id)); }} />
+        <div className="form-footer"><span className="muted">{version ? `Editing version ${version}; saving creates a new version.` : 'Unsaved scorecard'}</span><div className="form-actions">{savedOnce && <button type="button" onClick={() => nav(`/recruiter/requisitions/${req.id}/upload`)}>Next: upload CVs <ArrowRight size={15}/></button>}<button type="button" className={savedOnce ? 'secondary' : ''} disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save scorecard'}</button></div></div>
       </div>
     </>}
   </main></>;
 }
 
-type CandidateRow = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; skills: string[]; score: number | null; band: string | null; score_summary: ScoreSummaryData | null; needs_review: boolean; review_reasons: string[]; stage: string; criteria: any[]; duplicate_of_id?: string | null };
+type CandidateRow = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; skills: string[]; score: number | null; band: string | null; score_summary: ScoreSummaryData | null; needs_review: boolean; review_reasons: string[]; stage: string; criteria: any[]; duplicate_of_id?: string | null; duplicate_count?: number };
+function groupCandidateRows(rows: CandidateRow[]): CandidateRow[] {
+  const groups = new Map<string, CandidateRow[]>();
+  rows.forEach(row => { const root = row.duplicate_of_id || row.candidate_id; groups.set(root, [...(groups.get(root) || []), row]); });
+  return Array.from(groups.values()).map(group => {
+    const representative = group.find(row => row.duplicate_of_id) || group[0];
+    return { ...representative, duplicate_count: group.length + (representative.duplicate_of_id && group.length === 1 ? 1 : 0) };
+  });
+}
 function CandidateList({ id }: { id: string }) {
   const [items, setItems] = useState<CandidateRow[]>([]); const [q, setQ] = useState(''); const [band, setBand] = useState(''); const [needsReview, setNeedsReview] = useState(''); const [stage, setStage] = useState('');
-  const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [activeIndex, setActiveIndex] = useState(0);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const load = () => {
     setLoading(true); setError('');
     const params = new URLSearchParams(); if (q.trim()) params.set('q', q.trim()); if (band) params.set('band', band); if (needsReview) params.set('needs_review', needsReview); if (stage) params.set('stage', stage);
-    void api<{ items: CandidateRow[] }>(`/requisitions/${id}/applications?${params.toString()}`).then(result => setItems(result.items)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false));
+    void api<{ items: CandidateRow[] }>(`/requisitions/${id}/applications?${params.toString()}`).then(result => { setItems(groupCandidateRows(result.items)); setActiveIndex(0); }).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false));
   };
   const clearFilters = () => {
     setQ(''); setBand(''); setNeedsReview(''); setStage(''); setLoading(true); setError('');
-    void api<{ items: CandidateRow[] }>(`/requisitions/${id}/applications`).then(result => setItems(result.items)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false));
+    void api<{ items: CandidateRow[] }>(`/requisitions/${id}/applications`).then(result => { setItems(groupCandidateRows(result.items)); setActiveIndex(0); }).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false));
   };
   useEffect(load, [id, band, needsReview, stage]);
-  const open = (applicationId: string) => window.location.assign(`/recruiter/applications/${applicationId}`);
-  return <main><PageHeader title="Candidates" description="Ranks are suggestions. Nobody is rejected automatically." />
-    <div className="filters"><input placeholder="Search all candidates, including low matches" value={q} onChange={event => setQ(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') load(); }} />
-      <select value={band} onChange={event => setBand(event.target.value)}><option value="">All bands</option><option value="strong">Strong match</option><option value="possible">Possible match</option><option value="low">Low match</option></select>
-      <select value={needsReview} onChange={event => setNeedsReview(event.target.value)}><option value="">All review states</option><option value="true">Needs review</option><option value="false">No review flag</option></select>
-      <select value={stage} onChange={event => setStage(event.target.value)}><option value="">All stages</option>{['sourced','screened','submitted','shortlisted','interview','offered','joined','client_rejected','withdrawn'].map(value => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select>
-      <button type="button" className="secondary" onClick={load}>Search</button></div>
-    {loading ? <Skeleton rows={6} /> : error ? <ErrorState message={error} retry={load} /> : items.length === 0 ? <EmptyState title="No candidates match these filters" action={<button type="button" onClick={clearFilters}>Clear filters</button>} /> : <div className="candidate-table" role="table" aria-label="Candidates">
-      <div className="candidate-head" role="row"><span>Candidate</span><span>Role · experience</span><span>Score</span><span>Evidence fit</span><span>Stage</span><span>Action</span></div>
-      {items.map(item => <div className="candidate-row" role="row" key={item.id}>
-        <span><b>{item.candidate_code}</b><br />{item.name}{item.needs_review && <small className="review-tag">Needs review</small>}{item.duplicate_of_id && <small className="review-tag">Possible duplicate</small>}</span>
+  const open = (applicationId: string) => { sessionStorage.setItem('rankedApplicationIds', JSON.stringify(items.map(item => item.id))); window.location.assign(`/recruiter/applications/${applicationId}`); };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (loading || !items.length || event.target instanceof HTMLElement && (['INPUT','TEXTAREA','SELECT','BUTTON','A'].includes(event.target.tagName) || event.target.isContentEditable || !!event.target.closest('[role="button"]'))) return;
+      if (event.key === 'j' || event.key === 'k') { event.preventDefault(); setActiveIndex(index => { const next = Math.max(0, Math.min(items.length - 1, index + (event.key === 'j' ? 1 : -1))); rowRefs.current.get(items[next].id)?.scrollIntoView({ block: 'nearest' }); return next; }); }
+      if (event.key === 'Enter') { event.preventDefault(); open(items[activeIndex].id); }
+    };
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
+  }, [items, activeIndex, loading]);
+  const selectBand = (value: string) => { setNeedsReview(''); setBand(value); };
+  const filterOptions = [{ label: 'All', value: '' }, { label: 'Strong', value: 'strong' }, { label: 'Possible', value: 'possible' }, { label: 'Low', value: 'low' }, { label: 'Needs review', value: 'needs_review' }];
+  return <main><PageHeader title="Ranked candidates" description="Review evidence and choose who to send to the client." />
+    <div className="candidate-toolbar"><div className="filter-chips" role="group" aria-label="Candidate filters">{filterOptions.map(option=>{const selected=option.value==='needs_review'?needsReview==='true'&&!band:band===option.value&&!needsReview;return <button type="button" className={selected?'active':''} aria-pressed={selected} onClick={()=>option.value==='needs_review'? (setBand(''),setNeedsReview(selected?'':'true')):selectBand(option.value)} key={option.label}>{option.label}</button>;})}</div>
+      <div className="filters"><input aria-label="Search candidates" placeholder="Search candidates" value={q} onChange={event => setQ(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') load(); }} /><select aria-label="Filter by stage" value={stage} onChange={event => setStage(event.target.value)}><option value="">All stages</option>{['sourced','screened','submitted','shortlisted','interview','offered','joined','client_rejected','withdrawn'].map(value => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select><button type="button" className="secondary" onClick={load}>Search</button></div></div>
+    <p className="keyboard-hint"><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>Enter</kbd> review · Scores are suggestions; no one is automatically rejected.</p>
+    {loading ? <Skeleton rows={6} variant="candidate" /> : error ? <ErrorState message={error} retry={load} /> : items.length === 0 ? <EmptyState icon={<Users size={22}/>} title="No candidates match these filters" description="Try another filter or return to all candidates." action={<button type="button" className="secondary" onClick={clearFilters}>Clear filters</button>} /> : <div className="candidate-table" role="table" aria-label="Ranked candidates">
+      <div className="candidate-head" role="row"><span>Rank</span><span>Candidate</span><span>Role · experience</span><span>Score</span><span>Criteria</span><span>Stage</span><span>Action</span></div>
+      {items.map((item,index) => <div ref={node=>{if(node)rowRefs.current.set(item.id,node);else rowRefs.current.delete(item.id);}} className={`candidate-row ${activeIndex===index?'keyboard-active':''}`} data-active={activeIndex===index} role="row" tabIndex={0} key={item.id} onClick={()=>setActiveIndex(index)} onDoubleClick={()=>open(item.id)}>
+        <span className="candidate-rank">#{index+1}</span>
+        <span className="candidate-name"><b>{item.name}</b><small>{item.candidate_code}{item.duplicate_count && item.duplicate_count>1 && <span className="cv-count">{item.duplicate_count} CVs</span>}</small>{item.needs_review&&<span className="review-dot" title="Needs review" aria-label="Needs review"/>}{item.duplicate_of_id&&<small className="duplicate-hint">Possible duplicate</small>}</span>
         <span>{item.current_role || '—'}<small>{item.experience ?? '—'} years</small></span>
-        <span className="score-cell"><ScoreSummary summary={item.score_summary} />{item.score !== null && <div className="score-track"><div style={{ width: `${item.score}%` }} /></div>}</span>
-        <span className="criteria-chips">{item.criteria?.map(c => <StatusBadge key={c.criterion_id} status={c.verdict} />)}</span>
+        <span className="score-cell">{item.score !== null ? <><b>{item.score}</b><div className="score-track"><div style={{ width: `${item.score}%` }} /></div><small><StatusBadge status={item.band || 'unknown'} /></small></> : <span className="muted">Not scored</span>}</span>
+        <span className="criteria-chips">{item.criteria?.map(c => <span className="criterion-chip" key={c.criterion_id}><StatusBadge status={c.verdict}/><small>{c.label}</small></span>)}</span>
         <span><StatusBadge status={item.stage} /></span><span><button type="button" className="secondary" onClick={() => open(item.id)}>Review</button></span>
       </div>)}
     </div>}
@@ -274,13 +297,14 @@ type PipelineColumn = { stage: string; count: number; applications: PipelineCard
 function PipelineBoard({ requisitionId }: { requisitionId: string }) {
   const [columns, setColumns] = useState<PipelineColumn[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(''); const [errors, setErrors] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState('');
   const [retryMoves, setRetryMoves] = useState<Record<string, { stage: string; details: { note?: string; confirmed_slot?: string } }>>({});
   const [pending, setPending] = useState<Record<string, { stage: string; slot: string }>>({});
   const load = () => { setLoading(true); setError(''); void api<{ columns: PipelineColumn[] }>(`/requisitions/${requisitionId}/pipeline`).then(data => setColumns(data.columns)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load pipeline')).finally(() => setLoading(false)); };
   useEffect(load, [requisitionId]);
   async function move(applicationId: string, stage: string, details: { note?: string; confirmed_slot?: string } = {}) {
     setBusyId(applicationId); setErrors(current => ({ ...current, [applicationId]: '' }));
-    try { await api(`/applications/${applicationId}/stage`, { method: 'POST', body: JSON.stringify({ stage, ...details }) }); setPending(current => { const next = { ...current }; delete next[applicationId]; return next; }); setRetryMoves(current => { const next = { ...current }; delete next[applicationId]; return next; }); load(); }
+    try { await api(`/applications/${applicationId}/stage`, { method: 'POST', body: JSON.stringify({ stage, ...details }) }); setPending(current => { const next = { ...current }; delete next[applicationId]; return next; }); setRetryMoves(current => { const next = { ...current }; delete next[applicationId]; return next; }); setToast(`Moved candidate to ${stage.replaceAll('_',' ')}.`); window.setTimeout(()=>setToast(''),3500); load(); }
     catch (reason) { setErrors(current => ({ ...current, [applicationId]: reason instanceof Error ? reason.message : 'Unable to move candidate' })); setRetryMoves(current => ({ ...current, [applicationId]: { stage, details } })); }
     finally { setBusyId(''); }
   }
@@ -292,7 +316,7 @@ function PipelineBoard({ requisitionId }: { requisitionId: string }) {
   }
   if (loading) return <main><Skeleton rows={5} /></main>;
   if (error) return <main><ErrorState message={error} retry={load} /></main>;
-  return <main className="pipeline-main"><PageHeader title="Pipeline" description="Move candidates through client review and hiring stages." />
+  return <main className="pipeline-main"><PageHeader title="Pipeline" description="Move candidates through client review and hiring stages." />{toast&&<Toast message={toast} onDismiss={()=>setToast('')}/>}
     <div className="pipeline-scroll" aria-label="Candidate pipeline">
       {columns.map(column => <section className="pipeline-column" key={column.stage}>
         <header className="pipeline-column-head"><b>{column.stage.replaceAll('_', ' ')}</b><span>{column.count}</span></header>
@@ -302,7 +326,7 @@ function PipelineBoard({ requisitionId }: { requisitionId: string }) {
           <div className="pipeline-card-score">{card.score !== null ? <ScoreSummary summary={card.score_summary} /> : <span className="muted">Not scored</span>}</div>
           <button type="button" className="secondary review-card" onClick={() => window.location.assign(`/recruiter/applications/${card.id}`)}>Review candidate</button>
           {card.allowed_transitions.length > 0 && <label className="stage-menu">Move stage<select value="" disabled={busyId === card.id} onChange={event => selectStage(card, event.target.value)}><option value="">Choose stage</option>{card.allowed_transitions.map(stage => <option key={stage} value={stage}>{stage.replaceAll('_', ' ')}</option>)}</select></label>}
-          {pending[card.id]?.stage === 'interview' && <div className="slot-confirm"><label>Confirm a proposed time<select value={pending[card.id].slot} onChange={event => setPending(current => ({ ...current, [card.id]: { stage: 'interview', slot: event.target.value } }))}><option value="">Choose a slot</option>{card.proposed_slots.map(slot => <option key={slot} value={slot}>{new Date(slot).toLocaleString()}</option>)}</select></label><div><button type="button" disabled={busyId === card.id || !pending[card.id].slot} onClick={() => void move(card.id, 'interview', { confirmed_slot: pending[card.id].slot })}>Confirm</button><button type="button" className="link" onClick={() => setPending(current => { const next = { ...current }; delete next[card.id]; return next; })}>Cancel</button></div></div>}
+          {pending[card.id]?.stage === 'interview' && <div className="slot-confirm"><label>Confirm a proposed time<select value={pending[card.id].slot} onChange={event => setPending(current => ({ ...current, [card.id]: { stage: 'interview', slot: event.target.value } }))}><option value="">Choose a slot</option>{card.proposed_slots.map(slot => <option key={slot} value={slot}>{new Date(slot).toLocaleString()}</option>)}</select></label><div><button type="button" className="secondary" disabled={busyId === card.id || !pending[card.id].slot} onClick={() => void move(card.id, 'interview', { confirmed_slot: pending[card.id].slot })}>Confirm</button><button type="button" className="link" onClick={() => setPending(current => { const next = { ...current }; delete next[card.id]; return next; })}>Cancel</button></div></div>}
           {errors[card.id] && <ErrorState message={errors[card.id]} retry={() => { const target = retryMoves[card.id]; if (target) void move(card.id, target.stage, target.details); }} />}
         </article>)}
       </section>)}
@@ -314,24 +338,36 @@ type PortalRequisition = { id: string; title: string; location: string; candidat
 type PortalCandidate = { application_id: string; candidate_code: string; name: string; current_role: string; experience_years: number | null; skills: string[]; notice_days: number | null; expected_ctc_lpa: number | null; score_summary: ScoreSummaryData | null; top_evidence: { label: string; verdict: string; quote: string }[]; recruiter_note: string | null; status: string; band: string | null; redacted_cv_text?: string };
 
 function PortalShell({ children }: { children: React.ReactNode }) {
-  return <div className="portal-shell"><header><button type="button" className="portal-brand" onClick={() => window.location.assign('/portal')}>Shortlist<span>AI</span></button><div className="header-actions"><AIStatusBadge /><button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></div></header>{children}</div>;
+  const user=(()=>{try{return JSON.parse(localStorage.getItem('user')||'{}')}catch{return {}}})();
+  const company=user.email?.includes('meridian')?'Meridian Bank':'Kestrel IT Services';
+  return <div className="portal-shell"><header><button type="button" className="portal-brand" aria-label="ShortlistAI portal home" onClick={() => window.location.assign('/portal')}>Shortlist<span>AI</span></button><div className="portal-account"><b>{company}</b><span>Client portal</span></div><button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></header>{children}</div>;
 }
 
 function PortalRequisitions() {
   const [rows, setRows] = useState<PortalRequisition[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const load = () => { setLoading(true); setError(''); void api<PortalRequisition[]>('/portal/requisitions').then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load requisitions')).finally(() => setLoading(false)); };
   useEffect(load, []);
-  return <PortalShell><main className="portal-main"><PageHeader title="Your open roles" description="Review candidates submitted by your recruiting team." />
-    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No roles have candidates ready yet" action={<button type="button" onClick={load}>Check again</button>} /> : <div className="portal-req-list">{rows.map(req => <button type="button" className="portal-req-card" key={req.id} onClick={() => window.location.assign(`/portal/requisitions/${req.id}/candidates`)}><span className="portal-req-copy"><b>{req.title}</b><small>{req.location}</small></span><span className="portal-count">{req.candidate_count}<small>{req.candidate_count === 1 ? 'candidate' : 'candidates'}</small></span></button>)}</div>}
+  return <PortalShell><main className="portal-main"><PageHeader breadcrumb={<span>Client portal</span>} title="Open roles" description="Review candidates shared by your recruiting team." />
+    {loading ? <Skeleton rows={3} variant="card" /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState icon={<FileText size={22}/>} title="No roles have candidates ready yet" description="New submissions will appear here." action={<button type="button" className="secondary" onClick={load}>Refresh</button>} /> : <div className="portal-req-list">{rows.map(req => <button type="button" className="portal-req-card" key={req.id} onClick={() => window.location.assign(`/portal/requisitions/${req.id}/candidates`)}><span className="portal-req-copy"><b>{req.title}</b><small>{req.location}</small></span><span className="portal-count">{req.candidate_count}<small>{req.candidate_count === 1 ? 'candidate' : 'candidates'}</small></span><ArrowRight size={16}/></button>)}</div>}
   </main></PortalShell>;
+}
+
+function PortalCandidateCard({candidate}:{candidate:PortalCandidate}) {
+  return <article className="portal-candidate-card" key={candidate.application_id}><div className="portal-candidate-heading"><div><b>{candidate.name}</b><small>{candidate.candidate_code}</small></div><StatusBadge status={candidate.status} /></div><h2>{candidate.current_role || 'Candidate'}</h2><p>{candidate.experience_years ?? '—'} years · {candidate.skills.slice(0, 4).join(' · ')}</p><div className="portal-summary"><ScoreSummary summary={candidate.score_summary} /></div>{candidate.top_evidence.slice(0, 2).map((item, index) => <div className="portal-list-evidence" key={`${item.label}-${index}`}><div className="portal-evidence-heading"><b>{item.label}</b><StatusBadge status={item.verdict} /></div><blockquote>{item.quote}</blockquote></div>)}<button type="button" className="secondary portal-review" onClick={() => window.location.assign(`/portal/applications/${candidate.application_id}`)}>Review candidate <ArrowRight size={15}/></button></article>;
 }
 
 function PortalCandidates({ requisitionId }: { requisitionId: string }) {
   const [rows, setRows] = useState<PortalCandidate[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
-  const load = () => { setLoading(true); setError(''); void api<PortalCandidate[]>(`/portal/requisitions/${requisitionId}/candidates`).then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false)); };
+  const [showReviewed,setShowReviewed]=useState(false);
+  const load = () => { setLoading(true); setError(''); void api<PortalCandidate[]>(`/portal/requisitions/${requisitionId}/candidates`).then(value=>{setRows(value);const pending=value.filter(item=>item.status==='submitted').map(item=>item.application_id);sessionStorage.setItem('portalReviewQueue',JSON.stringify(pending));sessionStorage.setItem('portalCandidatesBack',`/portal/requisitions/${requisitionId}/candidates`);}).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false)); };
   useEffect(load, [requisitionId]);
-  return <PortalShell><main className="portal-main"><button type="button" className="link portal-back" onClick={() => window.location.assign('/portal')}>← Roles</button><PageHeader title="Candidates" description="Names and contact details are masked in this portal." />
-    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No submitted candidates yet" action={<button type="button" onClick={() => window.location.assign('/portal')}>Back to roles</button>} /> : <div className="portal-cards">{rows.map(candidate => <article className="portal-candidate-card" key={candidate.application_id}><div className="portal-candidate-heading"><div><b>{candidate.name}</b><small>{candidate.candidate_code}</small></div><StatusBadge status={candidate.status} /></div><h2>{candidate.current_role || 'Candidate'}</h2><p>{candidate.experience_years ?? '—'} years · {candidate.skills.slice(0, 5).join(' · ')}</p><div className="portal-summary"><ScoreSummary summary={candidate.score_summary} /></div>{candidate.top_evidence.slice(0, 2).map((item, index) => <div className="portal-list-evidence" key={`${item.label}-${index}`}><div className="portal-evidence-heading"><b>{item.label}</b><StatusBadge status={item.verdict} /></div><blockquote>{item.quote}</blockquote></div>)}<button type="button" className="secondary portal-review" onClick={() => window.location.assign(`/portal/applications/${candidate.application_id}`)}>Review candidate</button></article>)}</div>}
+  const pending=rows.filter(item=>item.status==='submitted'); const reviewed=rows.filter(item=>item.status!=='submitted');
+  return <PortalShell><main className="portal-main"><PageHeader breadcrumb={<><button type="button" className="breadcrumb-link" onClick={()=>window.location.assign('/portal')}>Roles</button><span>/</span><span>Candidates</span></>} title="Candidates" description="Names are masked. Review the evidence and share your decision." />
+    {loading ? <Skeleton rows={3} variant="card" /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState icon={<Users size={22}/>} title="No submitted candidates yet" description="Candidates will appear here when the recruiter shares a shortlist." action={<button type="button" className="secondary" onClick={()=>window.location.assign('/portal')}>Back to roles</button>} /> : <>
+      {pending.length===0&&<EmptyState icon={<Check size={22}/>} title="All reviewed" description="You’ve reviewed every candidate currently awaiting a decision." action={reviewed.length>0?<button type="button" className="secondary" onClick={()=>setShowReviewed(value=>!value)}>{showReviewed?'Hide reviewed candidates':'See reviewed candidates'}</button>:undefined}/>}
+      {pending.length>0&&<><div className="portal-section-heading"><h2>Needs review</h2><span>{pending.length}</span></div><div className="portal-cards">{pending.map(candidate=><PortalCandidateCard key={candidate.application_id} candidate={candidate}/>)}</div></>}
+      {reviewed.length>0&&<details className="reviewed-section" open={showReviewed}><summary onClick={event=>{event.preventDefault();setShowReviewed(value=>!value);}}>Reviewed candidates <span>{reviewed.length}</span></summary>{showReviewed&&<div className="portal-cards">{reviewed.map(candidate=><PortalCandidateCard key={candidate.application_id} candidate={candidate}/>)}</div>}</details>}
+    </>}
   </main></PortalShell>;
 }
 
@@ -340,42 +376,53 @@ function localDateTime(value: Date) { const adjusted = new Date(value.getTime() 
 function PortalDetail({ applicationId }: { applicationId: string }) {
   const [data, setData] = useState<PortalCandidate>(); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [sheet, setSheet] = useState<PortalAction | null>(null);
   const [busy, setBusy] = useState(false); const [toast, setToast] = useState(''); const [feedbackStatus, setFeedbackStatus] = useState(''); const [reason, setReason] = useState(''); const [note, setNote] = useState('');
-  const [slots, setSlots] = useState([localDateTime(new Date(Date.now() + 2 * 86400000))]); const [retryAction, setRetryAction] = useState<() => void>(() => () => {});
-  const load = () => { setLoading(true); setError(''); void api<PortalCandidate>(`/portal/applications/${applicationId}`).then(setData).catch(reason => { setError(reason instanceof Error ? reason.message : 'Unable to load candidate'); setRetryAction(() => () => load()); }).finally(() => setLoading(false)); };
-  useEffect(load, [applicationId]);
-  async function sendFeedback(action: PortalAction) {
-    setBusy(true); setError('');
-    const payload: Record<string, unknown> = { action };
-    if (action === 'reject') { payload.reason_code = reason; payload.note = note; }
-    if (action === 'shortlist') payload.note = note;
-    if (action === 'propose_interview') payload.proposed_slots = slots.filter(Boolean).map(slot => new Date(slot).toISOString());
-    try {
-      const response = await api<{ status: string }>(`/portal/applications/${applicationId}/feedback`, { method: 'POST', body: JSON.stringify(payload) });
-      setFeedbackStatus(response.status); setToast(action === 'shortlist' ? 'Candidate added to your shortlist.' : action === 'reject' ? 'Feedback sent to the recruiting team.' : 'Interview times sent to the recruiting team.'); setSheet(null); setReason(''); setNote(''); await load();
-      window.setTimeout(() => setToast(''), 4000);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to send feedback'); setRetryAction(() => () => { void sendFeedback(action); }); }
-    finally { setBusy(false); }
+  const [pendingFeedback,setPendingFeedback]=useState<{action:PortalAction;payload:Record<string,unknown>}|null>(null);
+  const [slots, setSlots] = useState(['']); const [retryAction, setRetryAction] = useState<() => void>(() => () => {});
+  const nav=useNavigate(); const pendingTimer=useRef<number>();
+  const load = (showLoading=true) => { if(showLoading)setLoading(true); setError(''); void api<PortalCandidate>(`/portal/applications/${applicationId}`).then(setData).catch(reason => { setError(reason instanceof Error ? reason.message : 'Unable to load candidate'); setRetryAction(() => () => load()); }).finally(() => setLoading(false)); };
+  useEffect(()=>{load();return()=>{if(pendingTimer.current)window.clearTimeout(pendingTimer.current);};}, [applicationId]);
+  function buildPayload(action:PortalAction):Record<string,unknown>{const payload:Record<string,unknown>={action};if(action==='reject'){payload.reason_code=reason;payload.note=note;}if(action==='shortlist')payload.note=note;if(action==='propose_interview')payload.proposed_slots=slots.filter(Boolean).map(slot=>new Date(slot).toISOString());return payload;}
+  async function commitFeedback(action:PortalAction,payload:Record<string,unknown>){
+    setBusy(true);setPendingFeedback(null);setError('');
+    try{
+      const response=await api<{status:string}>(`/portal/applications/${applicationId}/feedback`,{method:'POST',body:JSON.stringify(payload)});
+      setFeedbackStatus(response.status);setData(current=>current?{...current,status:response.status}:current);setReason('');setNote('');
+      const success=action==='shortlist'?'Candidate shortlisted.':action==='reject'?'Feedback sent to the recruiting team.':'Interview times sent to the recruiting team.';
+      setToast(success);
+      let queue:string[]=[];try{queue=JSON.parse(sessionStorage.getItem('portalReviewQueue')||'[]')}catch{queue=[]}
+      const remaining=queue.filter(item=>item!==applicationId);sessionStorage.setItem('portalReviewQueue',JSON.stringify(remaining));
+      window.setTimeout(()=>{const next=remaining[0];if(next)nav(`/portal/applications/${next}`);else nav(sessionStorage.getItem('portalCandidatesBack')||'/portal');},900);
+      window.setTimeout(()=>setToast(''),3500);
+    }catch(reason){setFeedbackStatus(data?.status||'');setError(reason instanceof Error?reason.message:'Unable to send feedback');setRetryAction(()=>()=>{void commitFeedback(action,payload);});}
+    finally{setBusy(false);}
   }
-  if (loading) return <PortalShell><main className="portal-main"><Skeleton rows={5} /></main></PortalShell>;
+  function sendFeedback(action:PortalAction){
+    const payload=buildPayload(action);setPendingFeedback({action,payload});setSheet(null);setError('');setFeedbackStatus(action==='reject'?'client_rejected':'shortlisted');
+    setToast(action==='shortlist'?'Added to shortlist.':action==='reject'?'Feedback ready to send.':'Interview times ready to send.');
+    pendingTimer.current=window.setTimeout(()=>{pendingTimer.current=undefined;void commitFeedback(action,payload);},5000);
+  }
+  function undoFeedback(){if(pendingTimer.current)window.clearTimeout(pendingTimer.current);pendingTimer.current=undefined;setPendingFeedback(null);setFeedbackStatus('');setToast('Action undone.');}
+  if (loading) return <PortalShell><main className="portal-main"><Skeleton rows={4} variant="card" /></main></PortalShell>;
   if (error && !data) return <PortalShell><main className="portal-main"><ErrorState message={error} retry={retryAction} /></main></PortalShell>;
   if (!data) return null;
-  const canReview = data.status === 'submitted' || data.status === 'shortlisted';
-  return <PortalShell><main className="portal-main portal-detail-main"><button type="button" className="link portal-back" onClick={() => window.history.back()}>← Candidates</button>
-    <div className="portal-detail-heading"><div><h1>{data.name}</h1><p>{data.candidate_code} · {data.current_role || 'Candidate'}</p></div><StatusBadge status={feedbackStatus || data.status} /></div>
-    {toast && <div className="portal-toast" role="status">{toast}</div>}{error && <ErrorState message={error} retry={retryAction} />}
-    <section className="portal-detail-card"><h2>Summary</h2><ScoreSummary summary={data.score_summary} /><div className="portal-facts"><span><small>Experience</small><b>{data.experience_years ?? '—'} years</b></span><span><small>Notice period</small><b>{data.notice_days == null ? 'Not provided' : `${data.notice_days} days`}</b></span><span><small>Expected CTC</small><b>{data.expected_ctc_lpa == null ? 'Not provided' : `${data.expected_ctc_lpa} LPA`}</b></span></div><div className="portal-skills">{data.skills.map(skill => <span key={skill}>{skill}</span>)}</div></section>
-    <section className="portal-detail-card"><h2>Top evidence</h2>{data.top_evidence.length ? data.top_evidence.map((item, index) => <div className="portal-evidence" key={`${item.label}-${index}`}><div className="portal-evidence-heading"><b>{item.label}</b><StatusBadge status={item.verdict} /></div><blockquote>{item.quote}</blockquote></div>) : <p className="muted">No verified evidence quotes are available.</p>}</section>
+  const currentStatus=feedbackStatus||data.status;const canReview=currentStatus==='submitted'||currentStatus==='shortlisted';
+  const evidenceGroups=Array.from(data.top_evidence.reduce((groups,item)=>{groups.set(item.label,[...(groups.get(item.label)||[]),item]);return groups;},new Map<string,PortalCandidate['top_evidence']>()));
+  return <PortalShell><main className="portal-main portal-detail-main"><button type="button" className="link portal-back" onClick={() => nav(sessionStorage.getItem('portalCandidatesBack')||'/portal')}>← Candidates</button>
+    <div className="portal-detail-heading"><div><h1>{data.name}</h1><p>{data.candidate_code} · {data.current_role || 'Candidate'}</p></div><StatusBadge status={currentStatus} /></div>
+    {toast&&<div className="portal-toast"><Toast message={toast} action={pendingFeedback?{label:'Undo',onClick:undoFeedback}:undefined} onDismiss={()=>setToast('')}/></div>}{error && <ErrorState message={error} retry={retryAction} />}
+    <section className="portal-detail-card"><h2>Candidate summary</h2><ScoreSummary summary={data.score_summary} /><div className="portal-facts"><span><small>Experience</small><b>{data.experience_years ?? '—'} years</b></span><span><small>Notice period</small><b>{data.notice_days == null ? 'Not provided' : `${data.notice_days} days`}</b></span><span><small>Expected CTC</small><b>{data.expected_ctc_lpa == null ? 'Not provided' : `${data.expected_ctc_lpa} LPA`}</b></span></div><div className="portal-skills">{data.skills.map(skill => <span key={skill}>{skill}</span>)}</div></section>
+    <section className="portal-detail-card"><h2>Evidence by criterion</h2>{evidenceGroups.length ? evidenceGroups.map(([label,items])=><div className="portal-evidence-group" key={label}><div className="portal-evidence-heading"><h3>{label}</h3>{items[0]&&<StatusBadge status={items[0].verdict} />}</div>{items.map((item,index)=><div className="portal-evidence" key={`${item.label}-${index}`}><blockquote>{item.quote}</blockquote></div>)}</div>) : <p className="muted">No verified evidence quotes are available.</p>}</section>
     <section className="portal-detail-card"><h2>Recruiter note</h2><p>{data.recruiter_note || 'No recruiter note was provided.'}</p></section>
     <details className="portal-detail-card portal-redacted-cv"><summary>View redacted CV text</summary><pre>{data.redacted_cv_text}</pre></details>
-    {!canReview && <p className="portal-status-note">This candidate is now <StatusBadge status={feedbackStatus || data.status} />.</p>}
+    {!canReview && <p className="portal-status-note">This candidate is <StatusBadge status={currentStatus} />.</p>}
   </main>
-  {canReview && <div className="portal-action-bar"><div className="portal-action-inner">{data.status === 'submitted' && <><button type="button" disabled={busy} onClick={() => { setNote(''); setSheet('shortlist'); }}>Shortlist</button><button type="button" className="secondary" disabled={busy} onClick={() => setSheet('reject')}>Reject</button></>}{data.status === 'shortlisted' && <button type="button" disabled={busy} onClick={() => setSheet('propose_interview')}>Propose interview</button>}</div></div>}
+  {canReview&&!pendingFeedback&&<div className="portal-action-bar"><div className="portal-action-inner"><button type="button" disabled={busy||currentStatus!=='submitted'} className={currentStatus==='submitted'?'':'secondary'} onClick={() => { setNote(''); setSheet('shortlist'); }}>Shortlist</button><button type="button" className="secondary" disabled={busy||currentStatus!=='submitted'} onClick={() => setSheet('reject')}>Reject</button><button type="button" className={currentStatus==='shortlisted'?'':'secondary'} disabled={busy||currentStatus!=='shortlisted'} title={currentStatus==='submitted'?'Shortlist first to propose interview times':undefined} onClick={() => setSheet('propose_interview')}>Propose interview</button></div></div>}
   {sheet && <div className="bottom-sheet-backdrop" onClick={() => !busy && setSheet(null)}><section className="bottom-sheet" role="dialog" aria-modal="true" aria-label={sheet === 'shortlist' ? 'Shortlist candidate' : sheet === 'reject' ? 'Reject candidate' : 'Propose interview'} onClick={event => event.stopPropagation()}><div className="sheet-handle" /><div className="sheet-heading"><h2>{sheet === 'shortlist' ? 'Shortlist candidate' : sheet === 'reject' ? 'Share a rejection reason' : 'Propose interview times'}</h2><button type="button" className="link" disabled={busy} onClick={() => setSheet(null)}>Close</button></div>
     {sheet === 'reject' && <><label>Reason<select value={reason} onChange={event => setReason(event.target.value)}><option value="">Choose a reason</option><option value="skills_gap">Skills gap</option><option value="experience">Experience</option><option value="notice_period">Notice period</option><option value="ctc">CTC</option><option value="location">Location</option><option value="culture_fit">Culture fit</option><option value="other">Other</option></select></label>{reason === 'other' && <label>Note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Tell the recruiting team more" /></label>}</>}
     {sheet === 'shortlist' && <label>Optional note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Add a note for the recruiting team" /></label>}
-    {sheet === 'propose_interview' && <div className="slot-list"><p className="muted">Offer one to three future times. The recruiter will confirm one.</p>{slots.map((slot, index) => <div className="slot-input" key={index}><label>Option {index + 1}<input type="datetime-local" value={slot} min={localDateTime(new Date())} onChange={event => setSlots(current => current.map((item, i) => i === index ? event.target.value : item))} /></label>{slots.length > 1 && <button type="button" className="link" onClick={() => setSlots(current => current.filter((_, i) => i !== index))}>Remove</button>}</div>)}{slots.length < 3 && <button type="button" className="secondary" onClick={() => setSlots(current => [...current, localDateTime(new Date(Date.now() + (current.length + 2) * 86400000))])}>Add another time</button>}</div>}
+    {sheet === 'propose_interview' && <div className="slot-list"><p className="muted">Offer one to three future times. The recruiter will confirm one.</p>{slots.map((slot, index) => <div className="slot-input" key={index}><label>Option {index + 1}<input type="datetime-local" value={slot} min={localDateTime(new Date())} onChange={event => setSlots(current => current.map((item, i) => i === index ? event.target.value : item))} /></label>{slots.length > 1 && <button type="button" className="link" onClick={() => setSlots(current => current.filter((_, i) => i !== index))}>Remove</button>}</div>)}{slots.length < 3 && <button type="button" className="secondary" onClick={() => setSlots(current => [...current, ''])}>Add another time</button>}</div>}
     {error && <ErrorState message={error} retry={retryAction} />}
-    <button type="button" disabled={busy || (sheet === 'reject' && (!reason || (reason === 'other' && !note.trim()))) || (sheet === 'propose_interview' && (slots.some(slot => !slot) || slots.length < 1))} onClick={() => void sendFeedback(sheet)}>{busy ? 'Sending…' : sheet === 'shortlist' ? 'Confirm shortlist' : sheet === 'reject' ? 'Send feedback' : 'Send proposed times'}</button>
+    <button type="button" disabled={busy || (sheet === 'reject' && (!reason || (reason === 'other' && !note.trim()))) || (sheet === 'propose_interview' && (slots.some(slot => !slot) || slots.length < 1))} onClick={() => sendFeedback(sheet)}>{sheet === 'shortlist' ? 'Confirm shortlist' : sheet === 'reject' ? 'Send feedback' : 'Send proposed times'}</button>
   </section></div>}
   </PortalShell>;
 }
@@ -420,43 +467,62 @@ function CandidateCalibrationList({ title, candidates, onAccessLog }: { title: s
 }
 
 function CandidateReview({ id }: { id: string }) {
-  const [data, setData] = useState<any>(); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [activeQuote, setActiveQuote] = useState(''); const [showModelInput, setShowModelInput] = useState(false); const [note, setNote] = useState(''); const [message, setMessage] = useState('');
+  const [data, setData] = useState<any>(); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [activeQuote, setActiveQuote] = useState(''); const [showModelInput, setShowModelInput] = useState(false); const [note, setNote] = useState(''); const [toast, setToast] = useState(''); const [moveStage, setMoveStage] = useState('');
   const [retryAction, setRetryAction] = useState<() => void>(() => () => {});
   const nav = useNavigate();
-  const load = () => { setLoading(true); setError(''); void api<any>(`/applications/${id}`).then(value => { setData(value); setNote(value.recruiter_note || ''); }).catch(reason => { setError(reason instanceof Error ? reason.message : 'Unable to load candidate'); setRetryAction(() => () => load()); }).finally(() => setLoading(false)); };
-  useEffect(load, [id]);
+  const rankedIds = useRef<string[]>([]);
+  const load = (showLoading=true) => { if(showLoading)setLoading(true); setError(''); void api<any>(`/applications/${id}`).then(value => { setData(value); setNote(value.recruiter_note || ''); }).catch(reason => { setError(reason instanceof Error ? reason.message : 'Unable to load candidate'); setRetryAction(() => () => { void load(); }); }).finally(() => setLoading(false)); };
+  useEffect(() => { try { rankedIds.current = JSON.parse(sessionStorage.getItem('rankedApplicationIds') || '[]'); } catch { rankedIds.current = []; } load(); }, [id]);
   useEffect(() => { if (activeQuote) document.querySelector('.cv-panel mark')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [activeQuote]);
+  const navigateNeighbor = (direction:number) => { const index=rankedIds.current.indexOf(id); const target=rankedIds.current[index+direction]; if(target)nav(`/recruiter/applications/${target}`); };
   async function action(path: string, body?: object, successMessage?: string) {
-    setBusy(true); setError(''); setMessage('');
-    try { await api(path, { method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}) }); setMessage(successMessage || 'Saved.'); await load(); }
+    setBusy(true); setError('');
+    try { await api(path, { method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}) }); setToast(successMessage || 'Saved.'); await load(false); window.setTimeout(()=>setToast(''),3500); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Action failed'); setRetryAction(() => () => { void action(path, body, successMessage); }); }
     finally { setBusy(false); }
   }
   async function openCv() {
     setBusy(true); setError('');
-    try { await api(`/applications/${id}/cv`); await load(); setMessage('CV opened and recorded.'); }
+    try { await api(`/applications/${id}/cv`); setData((current:any)=>current?{...current,recruiter_opened_at:current.recruiter_opened_at||new Date().toISOString(),stage:current.stage==='sourced'?'screened':current.stage}:current); setToast('CV opened and recorded.'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to open CV'); setRetryAction(() => () => { void openCv(); }); }
     finally { setBusy(false); }
   }
+  async function moveToStage(stage:string) {
+    if(!stage)return;
+    let path=`/applications/${id}/stage`; let body:Record<string,unknown>={stage};
+    if(stage==='withdrawn'){const reason=window.prompt('Add a reason for withdrawing this candidate.');if(!reason?.trim()){setMoveStage('');return;}path=`/applications/${id}/withdraw`;body={note:reason.trim()};}
+    setMoveStage('');await action(path,body,`Moved to ${stage.replaceAll('_',' ')}.`);
+  }
+  const stageTransitions:Record<string,string[]>={sourced:['withdrawn'],screened:['submitted','withdrawn'],submitted:['withdrawn'],shortlisted:['withdrawn'],interview:['offered','withdrawn'],offered:['joined','withdrawn'],joined:[],client_rejected:[],withdrawn:[]};
   const match = activeQuote ? (data?.raw_text || '').toLowerCase().indexOf(activeQuote.toLowerCase()) : -1;
   const cvText = data?.raw_text || '';
   const renderedCv = match >= 0 ? <>{cvText.slice(0, match)}<mark>{cvText.slice(match, match + activeQuote.length)}</mark>{cvText.slice(match + activeQuote.length)}</> : cvText;
-  if (loading) return <Shell><main><Skeleton rows={6} /></main></Shell>;
+  if (loading) return <Shell><main><Skeleton rows={5} variant="candidate" /></main></Shell>;
   if (error && !data) return <Shell><main><ErrorState message={error} retry={retryAction} /></main></Shell>;
   if (!data) return null;
+  const candidateIndex=rankedIds.current.indexOf(id);
+  const grouped=[['Met',data.criteria?.filter((item:any)=>item.verdict==='met')||[]],['Partial',data.criteria?.filter((item:any)=>item.verdict==='partial')||[]],['Not met',data.criteria?.filter((item:any)=>item.verdict==='not_met')||[]],['Not stated',data.criteria?.filter((item:any)=>['unknown','unverified'].includes(item.verdict))||[]]] as [string,any[]][];
+  const transitions=stageTransitions[data.stage]||[];
+  const isRecruiter=roleFromStorage()==='recruiter';
   return <Shell><main className="review-main">
-    <button type="button" className="link candidate-back" onClick={() => nav(-1)}>← Back to previous screen</button>
-    <PageHeader title={`${data.candidate_code} · ${data.name}`} description={`${data.current_role || 'Candidate'} · ${data.experience ?? '—'} years`} action={<div className="review-summary">{data.score !== null && <ScoreSummary summary={data.score_summary} />}<StatusBadge status={data.stage} /></div>} />
-    <p className="consent-status">Consent status <StatusBadge status={data.consent_status || 'pending'} />{data.deleted && <span className="muted">Personal data deleted</span>}</p>
-    {data.duplicate_of && <div className="duplicate-banner"><div><b>Possible duplicate</b><p>{data.name} may match {data.duplicate_of.candidate_code} · {data.duplicate_of.name}.</p></div><div><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/merge`, {}, 'Candidate merged.')}>Merge</button><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/not-duplicate`, {}, 'Marked as a different candidate.')}>Not a duplicate</button></div></div>}
-    {message && <p className="success-message">{message}</p>}{error && <ErrorState message={error} retry={retryAction} />}
-    <div className="review-grid"><section className="card cv-panel"><div className="panel-heading"><h2>CV</h2><button type="button" className="secondary" disabled={busy || !!data.recruiter_opened_at || data.deleted} onClick={() => void openCv()}>{data.deleted ? 'CV data deleted' : data.recruiter_opened_at ? 'CV opened' : busy ? 'Opening…' : 'Open CV'}</button></div><p className="muted">Contact details are hidden from the scoring model.</p><pre>{data.raw_text || 'CV text is unavailable.'}</pre></section>
-      <section className="card evidence-panel"><h2>Evidence and review</h2>{data.review_reasons?.length > 0 && <div className="review-reasons"><b>Review reasons</b>{data.review_reasons.map((reason: string) => <p key={reason}>{reason}</p>)}</div>}
-        <div className="hidden-note"><b>Hidden from AI</b><span>Name, gender, age, photo, marital status, contact details, address, and profile URLs.</span><button type="button" className="link" onClick={() => setShowModelInput(value => !value)}>{showModelInput ? 'Hide what the AI saw' : 'See what the AI saw'}</button>{showModelInput && <pre className="model-input">{data.scoring_input || data.redacted_text}</pre>}</div>
-        <div className="evidence-list">{data.criteria?.length ? data.criteria.map((criterion: any) => <article className="evidence-item" key={criterion.criterion_id}><div className="evidence-title"><b>{criterion.label}</b><StatusBadge status={criterion.verdict} /><span className="muted">{criterion.points ?? 0}/{criterion.max_points ?? 0} pts</span></div><p>{criterion.reason}</p>{criterion.evidence?.map((evidence: any, index: number) => <button type="button" className={`quote ${evidence.verified ? '' : 'unverified'}`} key={`${evidence.quote}-${index}`} onClick={() => setActiveQuote(evidence.quote)}>{evidence.quote || 'No evidence quote'}{evidence.verified ? '' : ' · unverified'}</button>)}</article>) : <EmptyState title="No score evidence available" action={<button type="button" onClick={() => nav(-1)}>Back to previous screen</button>} />}</div>
+    <div className="review-sticky"><nav className="breadcrumb" aria-label="Breadcrumb"><button type="button" className="breadcrumb-link" onClick={()=>nav('/recruiter')}>Requisitions</button><span>/</span><button type="button" className="breadcrumb-link" onClick={()=>nav(-1)}>Ranked candidates</button><span>/</span><span>{data.candidate_code}</span></nav>
+      <div className="review-sticky-content"><div className="review-neighbors"><button type="button" className="icon-button" aria-label="Previous candidate" title="Previous candidate" disabled={candidateIndex<=0} onClick={()=>navigateNeighbor(-1)}><ChevronLeft size={18}/></button><button type="button" className="icon-button" aria-label="Next candidate" title="Next candidate" disabled={candidateIndex<0||candidateIndex>=rankedIds.current.length-1} onClick={()=>navigateNeighbor(1)}><ChevronRight size={18}/></button></div>
+        <div className="review-identity"><h1>{data.name}</h1><p>{data.candidate_code} · {data.current_role || 'Candidate'} · {data.experience ?? '—'} years</p></div>
+        <div className="review-score">{data.score!==null&&<><b>{data.score}</b><StatusBadge status={data.band||'unknown'}/></>}</div>
+        <StatusBadge status={data.stage}/>
+        {isRecruiter&&<div className="review-header-actions">{transitions.filter(stage=>stage!=='submitted').length>0&&<label className="move-stage">Move stage<select aria-label="Move candidate stage" value={moveStage} disabled={busy||data.deleted} onChange={event=>void moveToStage(event.target.value)}><option value="">Move stage</option>{transitions.filter(stage=>stage!=='submitted').map(stage=><option key={stage} value={stage}>{stage.replaceAll('_',' ')}</option>)}</select></label>}{['sourced','screened'].includes(data.stage)&&<button type="button" disabled={busy||data.stage!=='screened'||!data.recruiter_opened_at||data.deleted} title={!data.recruiter_opened_at?'Open the CV first':undefined} onClick={()=>void action(`/applications/${id}/submit`,{note},'Submitted to the client.')}>Submit to client</button>}{transitions.includes('withdrawn')&&<button type="button" className="link" disabled={busy||data.deleted} onClick={()=>void moveToStage('withdrawn')}>Withdraw</button>}</div>}
+      </div>
+    </div>
+    {toast&&<Toast message={toast} onDismiss={()=>setToast('')}/>}{error&&<ErrorState message={error} retry={retryAction}/>}
+    <p className="consent-status">Consent <StatusBadge status={data.consent_status || 'pending'}/>{data.deleted&&<span className="muted">Personal data deleted</span>}</p>
+    {data.duplicate_of&&<div className="duplicate-banner"><div><b>Possible duplicate</b><p>{data.name} may match {data.duplicate_of.candidate_code} · {data.duplicate_of.name}.</p></div><div><button type="button" className="secondary" disabled={busy} onClick={()=>void action(`/candidates/${data.candidate_id}/merge`,{},'Candidate merged.')}>Merge</button><button type="button" className="secondary" disabled={busy} onClick={()=>void action(`/candidates/${data.candidate_id}/not-duplicate`,{},'Marked as a different candidate.')}>Not a duplicate</button></div></div>}
+    <div className="review-grid"><section className="card cv-panel"><div className="panel-heading"><div><h2>CV</h2><p className="muted">Contact details are hidden from the scoring model.</p></div><button type="button" className="secondary" disabled={busy || !!data.recruiter_opened_at || data.deleted} onClick={() => void openCv()}>{data.deleted ? 'CV data deleted' : data.recruiter_opened_at ? 'CV opened' : busy ? 'Opening…' : 'Open CV'}</button></div>{data.recruiter_opened_at?<pre>{data.raw_text ? renderedCv : 'CV text is unavailable.'}</pre>:<div className="cv-gate"><FileText size={22}/><p>Open the CV before reviewing or submitting this candidate.</p></div>}</section>
+      <section className="card evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p className="muted">Select a quote to locate it in the CV.</p></div>{data.score_summary&&<span className="review-mini-score">{data.score} · {data.band}</span>}</div>{data.review_reasons?.length>0&&<div className="review-reasons"><b>Needs review</b>{data.review_reasons.map((reason:string)=><p key={reason}>{reason}</p>)}</div>}
+        <div className="hidden-note"><b>Hidden from AI</b><span>Name, gender, age, photo, marital status, contact details, address, and profile URLs.</span><button type="button" className="link" onClick={()=>setShowModelInput(value=>!value)}>{showModelInput?'Hide model input':'See what the AI saw'}</button>{showModelInput&&<pre className="model-input">{data.scoring_input||data.redacted_text}</pre>}</div>
+        <div className="evidence-groups">{grouped.map(([label,criteria])=><section className="evidence-group" key={label}><h3>{label}<span>{criteria.length}</span></h3>{criteria.length?criteria.map((criterion:any)=><article className="evidence-item" key={criterion.criterion_id}><div className="evidence-title"><b>{criterion.label}</b><StatusBadge status={criterion.verdict}/></div>{criterion.reason&&<p>{criterion.reason}</p>}{criterion.evidence?.length?criterion.evidence.map((evidence:any,index:number)=><button type="button" className={`quote ${evidence.verified?'':'unverified'}`} key={`${evidence.quote}-${index}`} onClick={()=>setActiveQuote(evidence.quote)}>{evidence.quote||'No evidence quote'}{evidence.verified?'':' · unverified'}</button>):<p className="muted">No verified quote found in the CV.</p>}</article>):<p className="muted evidence-empty">No criteria in this group.</p>}</section>)}</div>
       </section>
     </div>
-    {roleFromStorage() === 'recruiter' && <section className="card review-actions"><label>Recruiter note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Add context for the client" /></label><div className="action-row"><button type="button" disabled={busy || !data.recruiter_opened_at || data.deleted} onClick={() => void action(`/applications/${id}/submit`, { note }, 'Submitted to the client.')}>Submit to client</button><button type="button" className="secondary" disabled={busy || data.deleted} onClick={() => { const reason = window.prompt('Why are you withdrawing this candidate?'); if (reason?.trim()) void action(`/applications/${id}/withdraw`, { note: reason.trim() }, 'Candidate withdrawn.'); }}>Withdraw</button><button type="button" className="secondary destructive-action" disabled={busy || data.deleted} onClick={() => { if (window.confirm('Delete this candidate’s personal data and CV files? This cannot be undone.')) void action(`/candidates/${data.candidate_id}/deletion`, {}, 'Candidate personal data deleted.'); }}>{data.deleted ? 'Data deleted' : 'Delete candidate data'}</button></div>{!data.recruiter_opened_at && <small className="muted">Open the CV before submitting.</small>}</section>}
+    {isRecruiter&&<section className="card review-actions"><label>Recruiter note<textarea value={note} onChange={event=>setNote(event.target.value)} placeholder="Add context for the client" /></label><div className="review-secondary-actions"><button type="button" className="link destructive-action" disabled={busy||data.deleted} onClick={()=>{if(window.confirm('Delete this candidate’s personal data and CV files? This cannot be undone.'))void action(`/candidates/${data.candidate_id}/deletion`,{},'Candidate personal data deleted.');}}>{data.deleted?'Data deleted':'Delete candidate data'}</button></div>{data.stage==='screened'&&!data.recruiter_opened_at&&<small className="muted">Open the CV first to enable submission.</small>}</section>}
   </main></Shell>;
 }
 
