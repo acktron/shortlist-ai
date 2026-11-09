@@ -14,6 +14,11 @@ def listing(db:Session=Depends(get_db),user:User=Depends(get_current_user)):
     if user.role==Role.client:q=q.filter(Requisition.client_id==user.client_id)
     rows=q.order_by(Requisition.created_at.desc()).all(); names={c.id:c.name for c in db.query(Client).all()}
     return [{**r.__dict__,'client_name':names.get(r.client_id,'')} for r in rows]
+@router.get('/clients')
+def clients(db:Session=Depends(get_db),user:User=Depends(get_current_user)):
+    query=db.query(Client)
+    if user.role==Role.client:query=query.filter(Client.id==user.client_id)
+    return [{'id':str(row.id),'name':row.name} for row in query.order_by(Client.name).all()]
 @router.post('',response_model=RequisitionOut)
 def create(data:RequisitionCreate,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter))):
     row=Requisition(**data.model_dump(),owner_id=user.id);db.add(row);db.commit();db.refresh(row);return {**row.__dict__,'client_name':db.get(Client,row.client_id).name}

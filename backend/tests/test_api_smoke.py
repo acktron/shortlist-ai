@@ -32,6 +32,8 @@ def test_every_get_endpoint_works_for_an_authorized_role(client):
         ("/api/auth/recruiter-check", recruiter_headers),
         ("/api/requisitions", recruiter_headers),
         ("/api/requisitions", client_headers),
+        ("/api/requisitions/clients", recruiter_headers),
+        ("/api/requisitions/clients", client_headers),
         (f"/api/requisitions/{requisition_id}", recruiter_headers),
         (f"/api/requisitions/{requisition_id}/scorecard", recruiter_headers),
         (f"/api/requisitions/{requisition_id}/summary", recruiter_headers),
@@ -50,3 +52,6 @@ def test_every_get_endpoint_works_for_an_authorized_role(client):
     for path, headers in checks:
         response = client.get(path, headers=headers or {})
         assert response.status_code == 200, f"GET {path}: {response.status_code} {response.text}"
+
+    client_rows = client.get("/api/requisitions/clients", headers=client_headers).json()
+    assert [row["name"] for row in client_rows] == ["Meridian Bank"]

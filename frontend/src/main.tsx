@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, useNavigate } from 'react-router-dom';
+import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { api, login, logout } from './api/client';
 import { EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge } from './components/shared';
 import { UploadScreen } from './components/upload';
 import './styles.css';
 
-type Req = { id: string; title: string; location: string; jd_text: string; status: string; client_name?: string };
+type Req = { id: string; client_id: string; title: string; location: string; jd_text: string; status: string; client_name?: string; created_at?: string; candidates?: number; strong_matches?: number; submitted?: number };
+type ClientOption = { id: string; name: string };
 type Summary = { candidates: number; strong_matches: number; submitted: number; uploads: number };
 type Draft = {
   title: string;
@@ -50,16 +51,17 @@ function Login() {
   const [password, setPassword] = useState('Demo@1234');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault(); setLoading(true); setError('');
+  async function attemptLogin() {
+    setLoading(true); setError('');
     try { const data = await login(email, password); localStorage.setItem('token', data.access_token); localStorage.setItem('user', JSON.stringify(data.user)); nav(data.user.role === 'client' ? '/portal' : '/recruiter'); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to sign in'); }
     finally { setLoading(false); }
   }
+  function submit(event: FormEvent) { event.preventDefault(); void attemptLogin(); }
   return <main className="login"><section><div className="brand">Shortlist<span>AI</span></div><h1>Sign in</h1><form onSubmit={submit}>
     <label>Email<input value={email} onChange={event => setEmail(event.target.value)} type="email" required /></label>
     <label>Password<input value={password} onChange={event => setPassword(event.target.value)} type="password" required /></label>
-    {error && <ErrorState message={error} retry={() => setError('')} />}
+    {error && <ErrorState message={error} retry={() => void attemptLogin()} />}
     <button type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Continue'}</button>
   </form><div className="chips">{accounts.map(([label, address]) => <button type="button" className="chip" key={address} onClick={() => { setEmail(address); setPassword('Demo@1234'); }}>{label}</button>)}</div></section></main>;
 }
@@ -73,11 +75,37 @@ function roleFromStorage(): string | undefined {
 }
 
 function Recruiter() {
-  const [rows, setRows] = useState<Req[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
-  const load = () => { setLoading(true); setError(''); void api<Req[]>('/requisitions').then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load requisitions')).finally(() => setLoading(false)); };
+  const [rows, setRows] = useState<Req[]>([]); const [clients, setClients] = useState<ClientOption[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const [showCreate, setShowCreate] = useState(false); const [creating, setCreating] = useState(false); const [createError, setCreateError] = useState('');
+  const [draft, setDraft] = useState({ client_id: '', title: '', location: '', openings: '1', jd_text: '' });
+  const load = () => {
+    setLoading(true); setError('');
+    void Promise.all([api<Req[]>('/requisitions'), api<ClientOption[]>('/requisitions/clients')])
+      .then(async ([requisitions, clientRows]) => {
+        const enriched = await Promise.all(requisitions.map(async req => ({ ...req, ...await api<Counts>(`/requisitions/${req.id}/summary`) })));
+        setRows(enriched); setClients(clientRows); setDraft(current => ({ ...current, client_id: current.client_id || clientRows[0]?.id || '' }));
+      }).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load requisitions')).finally(() => setLoading(false));
+  };
   useEffect(load, []);
-  return <main><PageHeader title="Requisitions" description="Open a role to review the scorecard, applicants, and pipeline." />
-    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No requisitions yet" /> : <div className="req-grid">{rows.map(req => <button type="button" className="req-card" key={req.id} onClick={() => window.location.assign(`/recruiter/requisitions/${req.id}/scorecard`)}><strong>{req.title}</strong><span>{req.client_name || 'Client'} · {req.location}</span><small>Open requisition workspace</small><StatusBadge status={req.status} /></button>)}</div>}
+  async function createRequisition() {
+    setCreating(true); setCreateError('');
+    try {
+      const created = await api<Req>('/requisitions', { method: 'POST', body: JSON.stringify({ ...draft, openings: Number(draft.openings) }) });
+      window.location.assign(`/recruiter/requisitions/${created.id}/scorecard`);
+    } catch (reason) { setCreateError(reason instanceof Error ? reason.message : 'Unable to create requisition'); }
+    finally { setCreating(false); }
+  }
+  const daysOpen = (createdAt?: string) => createdAt ? Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000)) : '—';
+  return <main><PageHeader title="Requisitions" description="Open a role to review the scorecard, applicants, and pipeline." action={<button type="button" className="req-create-button" onClick={() => { setCreateError(''); setShowCreate(true); }}>New requisition</button>} />
+    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No requisitions yet" action={<button type="button" onClick={() => setShowCreate(true)}>New requisition</button>} /> : <div className="req-grid">{rows.map(req => <button type="button" className="req-card" key={req.id} onClick={() => window.location.assign(`/recruiter/requisitions/${req.id}/scorecard`)}><span className="req-title-row"><strong>{req.title}</strong><StatusBadge status={req.status} /></span><span className="req-location">{req.client_name || 'Client'} · {req.location}</span><span className="req-metrics"><span><b>{req.candidates ?? 0}</b> candidates</span><span><b>{req.strong_matches ?? 0}</b> strong matches</span><span><b>{req.submitted ?? 0}</b> submitted</span><span><b>{daysOpen(req.created_at)}</b> days open</span></span><small>Open requisition workspace</small></button>)}</div>}
+    {showCreate && <div className="modal-backdrop"><form className="modal-card" onSubmit={event => { event.preventDefault(); void createRequisition(); }}><div className="modal-heading"><h2>New requisition</h2><button type="button" className="link" onClick={() => setShowCreate(false)}>Close</button></div>
+      <label>Client<select required value={draft.client_id} onChange={event => setDraft({ ...draft, client_id: event.target.value })}><option value="">Choose a client</option>{clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+      <label>Job title<input required minLength={2} maxLength={200} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} /></label>
+      <div className="modal-fields"><label>Location<input required minLength={2} maxLength={120} value={draft.location} onChange={event => setDraft({ ...draft, location: event.target.value })} /></label><label>Openings<input required type="number" min="1" max="100" value={draft.openings} onChange={event => setDraft({ ...draft, openings: event.target.value })} /></label></div>
+      <label>Job description<textarea required minLength={20} value={draft.jd_text} onChange={event => setDraft({ ...draft, jd_text: event.target.value })} /></label>
+      {createError && <ErrorState message={createError} retry={() => void createRequisition()} />}
+      <button type="submit" disabled={creating || !clients.length}>{creating ? 'Creating…' : 'Create requisition'}</button>
+    </form></div>}
   </main>;
 }
 
@@ -203,6 +231,10 @@ function CandidateList({ id }: { id: string }) {
     const params = new URLSearchParams(); if (q.trim()) params.set('q', q.trim()); if (band) params.set('band', band); if (needsReview) params.set('needs_review', needsReview); if (stage) params.set('stage', stage);
     void api<{ items: CandidateRow[] }>(`/requisitions/${id}/applications?${params.toString()}`).then(result => setItems(result.items)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false));
   };
+  const clearFilters = () => {
+    setQ(''); setBand(''); setNeedsReview(''); setStage(''); setLoading(true); setError('');
+    void api<{ items: CandidateRow[] }>(`/requisitions/${id}/applications`).then(result => setItems(result.items)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false));
+  };
   useEffect(load, [id, band, needsReview, stage]);
   const open = (applicationId: string) => window.location.assign(`/recruiter/applications/${applicationId}`);
   return <main><PageHeader title="Candidates" description="Ranks are suggestions. Nobody is rejected automatically." />
@@ -211,7 +243,7 @@ function CandidateList({ id }: { id: string }) {
       <select value={needsReview} onChange={event => setNeedsReview(event.target.value)}><option value="">All review states</option><option value="true">Needs review</option><option value="false">No review flag</option></select>
       <select value={stage} onChange={event => setStage(event.target.value)}><option value="">All stages</option>{['sourced','screened','submitted','shortlisted','interview','offered','joined','client_rejected','withdrawn'].map(value => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select>
       <button type="button" className="secondary" onClick={load}>Search</button></div>
-    {loading ? <Skeleton rows={6} /> : error ? <ErrorState message={error} retry={load} /> : items.length === 0 ? <EmptyState title="No candidates match these filters" /> : <div className="candidate-table" role="table" aria-label="Candidates">
+    {loading ? <Skeleton rows={6} /> : error ? <ErrorState message={error} retry={load} /> : items.length === 0 ? <EmptyState title="No candidates match these filters" action={<button type="button" onClick={clearFilters}>Clear filters</button>} /> : <div className="candidate-table" role="table" aria-label="Candidates">
       <div className="candidate-head" role="row"><span>Candidate</span><span>Role · experience</span><span>Score</span><span>Evidence fit</span><span>Stage</span><span>Action</span></div>
       {items.map(item => <div className="candidate-row" role="row" key={item.id}>
         <span><b>{item.candidate_code}</b><br />{item.name}{item.needs_review && <small className="review-tag">Needs review</small>}{item.duplicate_of_id && <small className="review-tag">Possible duplicate</small>}</span>
@@ -277,7 +309,7 @@ function PortalRequisitions() {
   const load = () => { setLoading(true); setError(''); void api<PortalRequisition[]>('/portal/requisitions').then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load requisitions')).finally(() => setLoading(false)); };
   useEffect(load, []);
   return <PortalShell><main className="portal-main"><PageHeader title="Your open roles" description="Review candidates submitted by your recruiting team." />
-    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No candidates are ready for review" /> : <div className="portal-req-list">{rows.map(req => <button type="button" className="portal-req-card" key={req.id} onClick={() => window.location.assign(`/portal/requisitions/${req.id}/candidates`)}><span className="portal-req-copy"><b>{req.title}</b><small>{req.location}</small></span><span className="portal-count">{req.candidate_count}<small>{req.candidate_count === 1 ? 'candidate' : 'candidates'}</small></span></button>)}</div>}
+    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No roles have candidates ready yet" action={<button type="button" onClick={load}>Check again</button>} /> : <div className="portal-req-list">{rows.map(req => <button type="button" className="portal-req-card" key={req.id} onClick={() => window.location.assign(`/portal/requisitions/${req.id}/candidates`)}><span className="portal-req-copy"><b>{req.title}</b><small>{req.location}</small></span><span className="portal-count">{req.candidate_count}<small>{req.candidate_count === 1 ? 'candidate' : 'candidates'}</small></span></button>)}</div>}
   </main></PortalShell>;
 }
 
@@ -286,7 +318,7 @@ function PortalCandidates({ requisitionId }: { requisitionId: string }) {
   const load = () => { setLoading(true); setError(''); void api<PortalCandidate[]>(`/portal/requisitions/${requisitionId}/candidates`).then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false)); };
   useEffect(load, [requisitionId]);
   return <PortalShell><main className="portal-main"><button type="button" className="link portal-back" onClick={() => window.location.assign('/portal')}>← Roles</button><PageHeader title="Candidates" description="Names and contact details are masked in this portal." />
-    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No submitted candidates yet" /> : <div className="portal-cards">{rows.map(candidate => <article className="portal-candidate-card" key={candidate.application_id}><div className="portal-candidate-heading"><div><b>{candidate.name}</b><small>{candidate.candidate_code}</small></div><StatusBadge status={candidate.status} /></div><h2>{candidate.current_role || 'Candidate'}</h2><p>{candidate.experience_years ?? '—'} years · {candidate.skills.slice(0, 5).join(' · ')}</p><p className="portal-summary">{candidate.summary}</p>{candidate.top_evidence.slice(0, 2).map((item, index) => <blockquote key={`${item.label}-${index}`}><b>{item.label}</b>{item.quote}</blockquote>)}<button type="button" className="secondary portal-review" onClick={() => window.location.assign(`/portal/applications/${candidate.application_id}`)}>Review candidate</button></article>)}</div>}
+    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No submitted candidates yet" action={<button type="button" onClick={() => window.location.assign('/portal')}>Back to roles</button>} /> : <div className="portal-cards">{rows.map(candidate => <article className="portal-candidate-card" key={candidate.application_id}><div className="portal-candidate-heading"><div><b>{candidate.name}</b><small>{candidate.candidate_code}</small></div><StatusBadge status={candidate.status} /></div><h2>{candidate.current_role || 'Candidate'}</h2><p>{candidate.experience_years ?? '—'} years · {candidate.skills.slice(0, 5).join(' · ')}</p><p className="portal-summary">{candidate.summary}</p>{candidate.top_evidence.slice(0, 2).map((item, index) => <blockquote key={`${item.label}-${index}`}><b>{item.label}</b>{item.quote}</blockquote>)}<button type="button" className="secondary portal-review" onClick={() => window.location.assign(`/portal/applications/${candidate.application_id}`)}>Review candidate</button></article>)}</div>}
   </main></PortalShell>;
 }
 
@@ -360,14 +392,14 @@ function Insights() {
   const averageOverlap = roles.length ? Math.round(roles.reduce((sum, role) => sum + role.overlap_percent, 0) / roles.length) : 0;
   const needsReview = roles.reduce((sum, role) => sum + role.needs_review_count, 0);
   return <Shell><main className="insights-main"><PageHeader title="Delivery insights" description="Weekly comparison of submitted candidates with the AI ranked list." action={<label className="week-picker">Week<input type="week" value={week} onChange={event => setWeek(event.target.value.toUpperCase())} /></label>} />
-    {loading ? <Skeleton rows={5} /> : error ? <ErrorState message={error} retry={load} /> : roles.length === 0 ? <EmptyState title={`No submissions for ${week}`} /> : <>
+    {loading ? <Skeleton rows={5} /> : error ? <ErrorState message={error} retry={load} /> : roles.length === 0 ? <EmptyState title={`No submissions for ${week}`} action={<button type="button" onClick={load}>Check this week again</button>} /> : <>
       <div className="insight-metrics"><div><small>Submitted</small><b>{totalSubmitted}</b></div><div><small>Average overlap</small><b>{averageOverlap}%</b></div><div><small>Needs review</small><b>{needsReview}</b></div></div>
       {roles.map(role => <section className="calibration-card" key={role.requisition_id}><header><div><h2>{role.title}</h2><p>{role.client_name} · AI top {role.top_n} of {role.submitted_count} submitted</p></div><span className="overlap-value">{role.overlap_percent}%<small>overlap</small></span></header>
         <div className="calibration-stats"><span>Client acceptance <b>{role.client_acceptance_rate}%</b></span><span>Needs review <b>{role.needs_review_count}</b></span><span>Overrides <b>{role.overrides}</b></span></div>
         <div className="calibration-lists"><CandidateCalibrationList title="Submitted but ranked low" candidates={role.submitted_but_ranked_low} onAccessLog={showLog} /><CandidateCalibrationList title="AI ranked high but not submitted" candidates={role.ranked_high_not_submitted} onAccessLog={showLog} /></div>
       </section>)}
     </>}
-    {logCandidate && <><button type="button" className="drawer-backdrop" aria-label="Close access log" onClick={() => setLogCandidate('')} /><aside className="drawer access-drawer"><div className="drawer-title"><h2>Candidate access history</h2><button type="button" className="secondary" onClick={() => setLogCandidate('')}>Close</button></div>{logLoading ? <Skeleton rows={4} /> : logError ? <ErrorState message={logError} retry={() => void showLog(logCandidate)} /> : logEvents.length === 0 ? <EmptyState title="No profile or CV views logged" /> : <div className="access-events">{logEvents.map((event, index) => <article key={`${event.created_at}-${index}`}><b>{event.action.replaceAll('_', ' ')}</b><span>{event.user} · {event.role || 'user'}</span><time>{new Date(event.created_at).toLocaleString()}</time>{event.ip && <small>IP {event.ip}</small>}</article>)}</div>}</aside></>}
+    {logCandidate && <><button type="button" className="drawer-backdrop" aria-label="Close access log" onClick={() => setLogCandidate('')} /><aside className="drawer access-drawer"><div className="drawer-title"><h2>Candidate access history</h2><button type="button" className="secondary" onClick={() => setLogCandidate('')}>Close</button></div>{logLoading ? <Skeleton rows={4} /> : logError ? <ErrorState message={logError} retry={() => void showLog(logCandidate)} /> : logEvents.length === 0 ? <EmptyState title="No profile or CV views logged" action={<button type="button" onClick={() => setLogCandidate('')}>Close access log</button>} /> : <div className="access-events">{logEvents.map((event, index) => <article key={`${event.created_at}-${index}`}><b>{event.action.replaceAll('_', ' ')}</b><span>{event.user} · {event.role || 'user'}</span><time>{new Date(event.created_at).toLocaleString()}</time>{event.ip && <small>IP {event.ip}</small>}</article>)}</div>}</aside></>}
   </main></Shell>;
 }
 function CandidateCalibrationList({ title, candidates, onAccessLog }: { title: string; candidates: CalibrationCandidate[]; onAccessLog: (id: string) => void }) {
@@ -400,6 +432,7 @@ function CandidateReview({ id }: { id: string }) {
   if (error && !data) return <Shell><main><ErrorState message={error} retry={retryAction} /></main></Shell>;
   if (!data) return null;
   return <Shell><main className="review-main">
+    <button type="button" className="link candidate-back" onClick={() => nav(-1)}>← Back to previous screen</button>
     <PageHeader title={`${data.candidate_code} · ${data.name}`} description={`${data.current_role || 'Candidate'} · ${data.experience ?? '—'} years`} action={<div className="review-summary">{data.score !== null && <><b>{data.score}</b><StatusBadge status={data.band} /></>}<StatusBadge status={data.stage} /></div>} />
     <p className="consent-status">Consent status <StatusBadge status={data.consent_status || 'pending'} />{data.deleted && <span className="muted">Personal data deleted</span>}</p>
     {data.duplicate_of && <div className="duplicate-banner"><div><b>Possible duplicate</b><p>{data.name} may match {data.duplicate_of.candidate_code} · {data.duplicate_of.name}.</p></div><div><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/merge`, {}, 'Candidate merged.')}>Merge</button><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/not-duplicate`, {}, 'Marked as a different candidate.')}>Not a duplicate</button></div></div>}
@@ -407,7 +440,7 @@ function CandidateReview({ id }: { id: string }) {
     <div className="review-grid"><section className="card cv-panel"><div className="panel-heading"><h2>CV</h2><button type="button" className="secondary" disabled={busy || !!data.recruiter_opened_at || data.deleted} onClick={() => void openCv()}>{data.deleted ? 'CV data deleted' : data.recruiter_opened_at ? 'CV opened' : busy ? 'Opening…' : 'Open CV'}</button></div><p className="muted">Contact details are hidden from the scoring model.</p><pre>{data.raw_text || 'CV text is unavailable.'}</pre></section>
       <section className="card evidence-panel"><h2>Evidence and review</h2>{data.review_reasons?.length > 0 && <div className="review-reasons"><b>Review reasons</b>{data.review_reasons.map((reason: string) => <p key={reason}>{reason}</p>)}</div>}
         <div className="hidden-note"><b>Hidden from AI</b><span>Name, gender, age, photo, marital status, contact details, address, and profile URLs.</span><button type="button" className="link" onClick={() => setShowModelInput(value => !value)}>{showModelInput ? 'Hide what the AI saw' : 'See what the AI saw'}</button>{showModelInput && <pre className="model-input">{data.scoring_input || data.redacted_text}</pre>}</div>
-        <div className="evidence-list">{data.criteria?.length ? data.criteria.map((criterion: any) => <article className="evidence-item" key={criterion.criterion_id}><div className="evidence-title"><b>{criterion.label}</b><StatusBadge status={criterion.verdict} /><span className="muted">{criterion.points ?? 0}/{criterion.max_points ?? 0} pts</span></div><p>{criterion.reason}</p>{criterion.evidence?.map((evidence: any, index: number) => <button type="button" className={`quote ${evidence.verified ? '' : 'unverified'}`} key={`${evidence.quote}-${index}`} onClick={() => setActiveQuote(evidence.quote)}>{evidence.quote || 'No evidence quote'}{evidence.verified ? '' : ' · unverified'}</button>)}</article>) : <EmptyState title="No score evidence available" />}</div>
+        <div className="evidence-list">{data.criteria?.length ? data.criteria.map((criterion: any) => <article className="evidence-item" key={criterion.criterion_id}><div className="evidence-title"><b>{criterion.label}</b><StatusBadge status={criterion.verdict} /><span className="muted">{criterion.points ?? 0}/{criterion.max_points ?? 0} pts</span></div><p>{criterion.reason}</p>{criterion.evidence?.map((evidence: any, index: number) => <button type="button" className={`quote ${evidence.verified ? '' : 'unverified'}`} key={`${evidence.quote}-${index}`} onClick={() => setActiveQuote(evidence.quote)}>{evidence.quote || 'No evidence quote'}{evidence.verified ? '' : ' · unverified'}</button>)}</article>) : <EmptyState title="No score evidence available" action={<button type="button" onClick={() => nav(-1)}>Back to previous screen</button>} />}</div>
       </section>
     </div>
     {roleFromStorage() === 'recruiter' && <section className="card review-actions"><label>Recruiter note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Add context for the client" /></label><div className="action-row"><button type="button" disabled={busy || !data.recruiter_opened_at || data.deleted} onClick={() => void action(`/applications/${id}/submit`, { note }, 'Submitted to the client.')}>Submit to client</button><button type="button" className="secondary" disabled={busy || data.deleted} onClick={() => { const reason = window.prompt('Why are you withdrawing this candidate?'); if (reason?.trim()) void action(`/applications/${id}/withdraw`, { note: reason.trim() }, 'Candidate withdrawn.'); }}>Withdraw</button><button type="button" className="secondary destructive-action" disabled={busy || data.deleted} onClick={() => { if (window.confirm('Delete this candidate’s personal data and CV files? This cannot be undone.')) void action(`/candidates/${data.candidate_id}/deletion`, {}, 'Candidate personal data deleted.'); }}>{data.deleted ? 'Data deleted' : 'Delete candidate data'}</button></div>{!data.recruiter_opened_at && <small className="muted">Open the CV before submitting.</small>}</section>}
@@ -425,17 +458,18 @@ function HubRoute({ id, tab }: { id: string; tab: string }) {
 }
 
 function App() {
-  if (window.location.pathname === '/insights') return <Insights />;
-  const portalApplicationMatch = window.location.pathname.match(/^\/portal\/applications\/([^/]+)$/);
+  const { pathname } = useLocation();
+  if (pathname === '/insights') return <Insights />;
+  const portalApplicationMatch = pathname.match(/^\/portal\/applications\/([^/]+)$/);
   if (portalApplicationMatch) return <PortalDetail applicationId={portalApplicationMatch[1]} />;
-  const portalRequisitionMatch = window.location.pathname.match(/^\/portal\/requisitions\/([^/]+)\/candidates$/);
+  const portalRequisitionMatch = pathname.match(/^\/portal\/requisitions\/([^/]+)\/candidates$/);
   if (portalRequisitionMatch) return <PortalCandidates requisitionId={portalRequisitionMatch[1]} />;
-  if (window.location.pathname === '/portal') return <PortalRequisitions />;
-  const reviewMatch = window.location.pathname.match(/^\/recruiter\/applications\/([^/]+)$/);
+  if (pathname === '/portal') return <PortalRequisitions />;
+  const reviewMatch = pathname.match(/^\/recruiter\/applications\/([^/]+)$/);
   if (reviewMatch) return <CandidateReview id={reviewMatch[1]} />;
-  const hubMatch = window.location.pathname.match(/^\/recruiter\/requisitions\/([^/]+)\/(scorecard|upload|candidates|pipeline)$/);
+  const hubMatch = pathname.match(/^\/recruiter\/requisitions\/([^/]+)\/(scorecard|upload|candidates|pipeline)$/);
   if (hubMatch) return <HubRoute id={hubMatch[1]} tab={hubMatch[2]} />;
-  if (window.location.pathname === '/recruiter') return <Shell><Recruiter /></Shell>;
+  if (pathname === '/recruiter') return <Shell><Recruiter /></Shell>;
   return <Login />;
 }
 
