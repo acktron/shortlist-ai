@@ -3,11 +3,13 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.db import Base
 from app.models import *  # noqa: F401,F403 - register all models
+from app.config import settings
 
 config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 def run_migrations_offline() -> None:
     context.configure(url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata, literal_binds=True, dialect_opts={"paramstyle": "named"})

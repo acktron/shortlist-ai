@@ -1,0 +1,1 @@
+export default {content:['./index.html','./src/**/*.{ts,tsx}'],theme:{extend:{fontFamily:{sans:['Inter','sans-serif']},borderRadius:{xl:'12px'},colors:{accent:'#3B3BD4',zinc:{950:'#09090b'}}}},plugins:[]};
