@@ -13,6 +13,7 @@ def _token(client, email: str) -> str:
 
 def test_every_get_endpoint_works_for_an_authorized_role(client):
     recruiter_headers = {"Authorization": f"Bearer {_token(client, 'recruiter@companya.demo')}"}
+    head_headers = {"Authorization": f"Bearer {_token(client, 'head@companya.demo')}"}
     client_headers = {"Authorization": f"Bearer {_token(client, 'priya@meridianbank.demo')}"}
 
     with SessionLocal() as db:
@@ -20,6 +21,7 @@ def test_every_get_endpoint_works_for_an_authorized_role(client):
         batch_id = db.query(UploadBatch).one().id
         cv_id = db.query(CvFile).filter_by(filename="smoke.pdf").one().id
         application_id = db.query(Application).filter_by(candidate_id=db.query(CvFile).filter_by(id=cv_id).one().candidate_id).one().id
+        candidate_id = db.query(CvFile).filter_by(id=cv_id).one().candidate_id
 
     checks = [
         ("/health", None),
@@ -41,6 +43,8 @@ def test_every_get_endpoint_works_for_an_authorized_role(client):
         (f"/api/cv-files/{cv_id}/redacted", recruiter_headers),
         (f"/api/applications/{application_id}", recruiter_headers),
         (f"/api/applications/{application_id}/cv", recruiter_headers),
+        ("/api/insights/calibration", head_headers),
+        (f"/api/candidates/{candidate_id}/access-log", head_headers),
     ]
 
     for path, headers in checks:

@@ -91,6 +91,7 @@ def detail(
         "needs_review": bool(score and score.needs_review),
         "review_reasons": score.review_reasons if score else [],
         "consent_status": candidate.consent_status,
+        "deleted": candidate.deleted_at is not None,
         "duplicate_of": ({"id": str(duplicate.id), "candidate_code": duplicate.candidate_code, "name": duplicate.full_name} if duplicate else None),
     }
 

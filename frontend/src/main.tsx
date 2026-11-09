@@ -65,7 +65,11 @@ function Login() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="shell"><header><div className="brand">Shortlist<span>AI</span></div><button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></header>{children}</div>;
+  return <div className="shell"><header><div className="brand">Shortlist<span>AI</span></div><div className="header-actions">{roleFromStorage() === 'delivery_head' && <button type="button" className="secondary" onClick={() => window.location.assign('/insights')}>Insights</button>}<button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></div></header>{children}</div>;
+}
+
+function roleFromStorage(): string | undefined {
+  try { return JSON.parse(localStorage.getItem('user') || '{}').role as string | undefined; } catch { return undefined; }
 }
 
 function Recruiter() {
@@ -331,6 +335,45 @@ function PortalDetail({ applicationId }: { applicationId: string }) {
   </PortalShell>;
 }
 
+type CalibrationCandidate = { candidate_id: string; candidate_code: string; name: string; current_role: string; score: number | null; band: string | null; stage: string; needs_review: boolean };
+type CalibrationRole = { requisition_id: string; title: string; client_name: string; submitted_count: number; top_n: number; overlap_percent: number; submitted_but_ranked_low: CalibrationCandidate[]; ranked_high_not_submitted: CalibrationCandidate[]; client_acceptance_rate: number; needs_review_count: number; overrides: number };
+type AccessEvent = { action: string; created_at: string; user: string; role: string | null; ip?: string | null; user_agent?: string | null };
+function currentIsoWeek() {
+  const today = new Date(); const date = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+function Insights() {
+  const [week, setWeek] = useState(currentIsoWeek()); const [roles, setRoles] = useState<CalibrationRole[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const [logCandidate, setLogCandidate] = useState(''); const [logEvents, setLogEvents] = useState<AccessEvent[]>([]); const [logError, setLogError] = useState(''); const [logLoading, setLogLoading] = useState(false);
+  const load = () => { setLoading(true); setError(''); void api<{ week: string; requisitions: CalibrationRole[] }>(`/insights/calibration?week=${encodeURIComponent(week)}`).then(response => setRoles(response.requisitions)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load calibration')).finally(() => setLoading(false)); };
+  useEffect(load, [week]);
+  async function showLog(candidateId: string) {
+    setLogCandidate(candidateId); setLogLoading(true); setLogError('');
+    try { const response = await api<{ events: AccessEvent[] }>(`/candidates/${candidateId}/access-log`); setLogEvents(response.events); }
+    catch (reason) { setLogError(reason instanceof Error ? reason.message : 'Unable to load access history'); }
+    finally { setLogLoading(false); }
+  }
+  const totalSubmitted = roles.reduce((sum, role) => sum + role.submitted_count, 0);
+  const averageOverlap = roles.length ? Math.round(roles.reduce((sum, role) => sum + role.overlap_percent, 0) / roles.length) : 0;
+  const needsReview = roles.reduce((sum, role) => sum + role.needs_review_count, 0);
+  return <Shell><main className="insights-main"><PageHeader title="Delivery insights" description="Weekly comparison of submitted candidates with the AI ranked list." action={<label className="week-picker">Week<input type="week" value={week} onChange={event => setWeek(event.target.value.toUpperCase())} /></label>} />
+    {loading ? <Skeleton rows={5} /> : error ? <ErrorState message={error} retry={load} /> : roles.length === 0 ? <EmptyState title={`No submissions for ${week}`} /> : <>
+      <div className="insight-metrics"><div><small>Submitted</small><b>{totalSubmitted}</b></div><div><small>Average overlap</small><b>{averageOverlap}%</b></div><div><small>Needs review</small><b>{needsReview}</b></div></div>
+      {roles.map(role => <section className="calibration-card" key={role.requisition_id}><header><div><h2>{role.title}</h2><p>{role.client_name} · AI top {role.top_n} of {role.submitted_count} submitted</p></div><span className="overlap-value">{role.overlap_percent}%<small>overlap</small></span></header>
+        <div className="calibration-stats"><span>Client acceptance <b>{role.client_acceptance_rate}%</b></span><span>Needs review <b>{role.needs_review_count}</b></span><span>Overrides <b>{role.overrides}</b></span></div>
+        <div className="calibration-lists"><CandidateCalibrationList title="Submitted but ranked low" candidates={role.submitted_but_ranked_low} onAccessLog={showLog} /><CandidateCalibrationList title="AI ranked high but not submitted" candidates={role.ranked_high_not_submitted} onAccessLog={showLog} /></div>
+      </section>)}
+    </>}
+    {logCandidate && <><button type="button" className="drawer-backdrop" aria-label="Close access log" onClick={() => setLogCandidate('')} /><aside className="drawer access-drawer"><div className="drawer-title"><h2>Candidate access history</h2><button type="button" className="secondary" onClick={() => setLogCandidate('')}>Close</button></div>{logLoading ? <Skeleton rows={4} /> : logError ? <ErrorState message={logError} retry={() => void showLog(logCandidate)} /> : logEvents.length === 0 ? <EmptyState title="No profile or CV views logged" /> : <div className="access-events">{logEvents.map((event, index) => <article key={`${event.created_at}-${index}`}><b>{event.action.replaceAll('_', ' ')}</b><span>{event.user} · {event.role || 'user'}</span><time>{new Date(event.created_at).toLocaleString()}</time>{event.ip && <small>IP {event.ip}</small>}</article>)}</div>}</aside></>}
+  </main></Shell>;
+}
+function CandidateCalibrationList({ title, candidates, onAccessLog }: { title: string; candidates: CalibrationCandidate[]; onAccessLog: (id: string) => void }) {
+  return <section className="calibration-list"><h3>{title}</h3>{candidates.length === 0 ? <p className="muted">None</p> : candidates.map(candidate => <article key={candidate.candidate_id}><div><b>{candidate.candidate_code} · {candidate.name}</b><small>{candidate.current_role || 'Candidate'} · {candidate.stage.replaceAll('_', ' ')}</small></div><span>{candidate.score ?? '—'}{candidate.band && <StatusBadge status={candidate.band} />}</span><button type="button" className="secondary" onClick={() => onAccessLog(candidate.candidate_id)}>Access log</button></article>)}</section>;
+}
+
 function CandidateReview({ id }: { id: string }) {
   const [data, setData] = useState<any>(); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [activeQuote, setActiveQuote] = useState(''); const [showModelInput, setShowModelInput] = useState(false); const [note, setNote] = useState(''); const [message, setMessage] = useState('');
   const [retryAction, setRetryAction] = useState<() => void>(() => () => {});
@@ -358,15 +401,16 @@ function CandidateReview({ id }: { id: string }) {
   if (!data) return null;
   return <Shell><main className="review-main">
     <PageHeader title={`${data.candidate_code} · ${data.name}`} description={`${data.current_role || 'Candidate'} · ${data.experience ?? '—'} years`} action={<div className="review-summary">{data.score !== null && <><b>{data.score}</b><StatusBadge status={data.band} /></>}<StatusBadge status={data.stage} /></div>} />
+    <p className="consent-status">Consent status <StatusBadge status={data.consent_status || 'pending'} />{data.deleted && <span className="muted">Personal data deleted</span>}</p>
     {data.duplicate_of && <div className="duplicate-banner"><div><b>Possible duplicate</b><p>{data.name} may match {data.duplicate_of.candidate_code} · {data.duplicate_of.name}.</p></div><div><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/merge`, {}, 'Candidate merged.')}>Merge</button><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/not-duplicate`, {}, 'Marked as a different candidate.')}>Not a duplicate</button></div></div>}
     {message && <p className="success-message">{message}</p>}{error && <ErrorState message={error} retry={retryAction} />}
-    <div className="review-grid"><section className="card cv-panel"><div className="panel-heading"><h2>CV</h2><button type="button" className="secondary" disabled={busy || !!data.recruiter_opened_at} onClick={() => void openCv()}>{data.recruiter_opened_at ? 'CV opened' : busy ? 'Opening…' : 'Open CV'}</button></div><p className="muted">Contact details are hidden from the scoring model.</p><pre>{renderedCv}</pre></section>
+    <div className="review-grid"><section className="card cv-panel"><div className="panel-heading"><h2>CV</h2><button type="button" className="secondary" disabled={busy || !!data.recruiter_opened_at || data.deleted} onClick={() => void openCv()}>{data.deleted ? 'CV data deleted' : data.recruiter_opened_at ? 'CV opened' : busy ? 'Opening…' : 'Open CV'}</button></div><p className="muted">Contact details are hidden from the scoring model.</p><pre>{data.raw_text || 'CV text is unavailable.'}</pre></section>
       <section className="card evidence-panel"><h2>Evidence and review</h2>{data.review_reasons?.length > 0 && <div className="review-reasons"><b>Review reasons</b>{data.review_reasons.map((reason: string) => <p key={reason}>{reason}</p>)}</div>}
         <div className="hidden-note"><b>Hidden from AI</b><span>Name, gender, age, photo, marital status, contact details, address, and profile URLs.</span><button type="button" className="link" onClick={() => setShowModelInput(value => !value)}>{showModelInput ? 'Hide what the AI saw' : 'See what the AI saw'}</button>{showModelInput && <pre className="model-input">{data.scoring_input || data.redacted_text}</pre>}</div>
         <div className="evidence-list">{data.criteria?.length ? data.criteria.map((criterion: any) => <article className="evidence-item" key={criterion.criterion_id}><div className="evidence-title"><b>{criterion.label}</b><StatusBadge status={criterion.verdict} /><span className="muted">{criterion.points ?? 0}/{criterion.max_points ?? 0} pts</span></div><p>{criterion.reason}</p>{criterion.evidence?.map((evidence: any, index: number) => <button type="button" className={`quote ${evidence.verified ? '' : 'unverified'}`} key={`${evidence.quote}-${index}`} onClick={() => setActiveQuote(evidence.quote)}>{evidence.quote || 'No evidence quote'}{evidence.verified ? '' : ' · unverified'}</button>)}</article>) : <EmptyState title="No score evidence available" />}</div>
       </section>
     </div>
-    <section className="card review-actions"><label>Recruiter note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Add context for the client" /></label><div className="action-row"><button type="button" disabled={busy || !data.recruiter_opened_at} onClick={() => void action(`/applications/${id}/submit`, { note }, 'Submitted to the client.')}>Submit to client</button><button type="button" className="secondary" disabled={busy} onClick={() => { const reason = window.prompt('Why are you withdrawing this candidate?'); if (reason?.trim()) void action(`/applications/${id}/withdraw`, { note: reason.trim() }, 'Candidate withdrawn.'); }}>Withdraw</button></div>{!data.recruiter_opened_at && <small className="muted">Open the CV before submitting.</small>}</section>
+    {roleFromStorage() === 'recruiter' && <section className="card review-actions"><label>Recruiter note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Add context for the client" /></label><div className="action-row"><button type="button" disabled={busy || !data.recruiter_opened_at || data.deleted} onClick={() => void action(`/applications/${id}/submit`, { note }, 'Submitted to the client.')}>Submit to client</button><button type="button" className="secondary" disabled={busy || data.deleted} onClick={() => { const reason = window.prompt('Why are you withdrawing this candidate?'); if (reason?.trim()) void action(`/applications/${id}/withdraw`, { note: reason.trim() }, 'Candidate withdrawn.'); }}>Withdraw</button><button type="button" className="secondary destructive-action" disabled={busy || data.deleted} onClick={() => { if (window.confirm('Delete this candidate’s personal data and CV files? This cannot be undone.')) void action(`/candidates/${data.candidate_id}/deletion`, {}, 'Candidate personal data deleted.'); }}>{data.deleted ? 'Data deleted' : 'Delete candidate data'}</button></div>{!data.recruiter_opened_at && <small className="muted">Open the CV before submitting.</small>}</section>}
   </main></Shell>;
 }
 
@@ -381,6 +425,7 @@ function HubRoute({ id, tab }: { id: string; tab: string }) {
 }
 
 function App() {
+  if (window.location.pathname === '/insights') return <Insights />;
   const portalApplicationMatch = window.location.pathname.match(/^\/portal\/applications\/([^/]+)$/);
   if (portalApplicationMatch) return <PortalDetail applicationId={portalApplicationMatch[1]} />;
   const portalRequisitionMatch = window.location.pathname.match(/^\/portal\/requisitions\/([^/]+)\/candidates$/);
