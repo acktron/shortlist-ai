@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .routers.auth import router as auth_router
 from .routers.requisitions import router as requisitions_router
+from .routers.uploads import router as uploads_router
 from .ai.provider import provider_meta
 from .workers.batch_processor import start_workers,stop_workers
 app=FastAPI(title="ShortlistAI API")
@@ -29,6 +30,7 @@ async def provider_startup_check():
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(",")],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 app.include_router(auth_router,prefix="/api")
 app.include_router(requisitions_router,prefix="/api")
+app.include_router(uploads_router,prefix="/api")
 @app.get('/api/meta')
 def meta(): return provider_meta()
 @app.get("/health")
