@@ -5,3 +5,10 @@ def test_requisitions_visible_and_scorecard_extract(client):
     previous=client.get(f'/api/requisitions/{rid}/scorecard',headers=h).json()
     criteria=[{'id':f'skill-{i}','kind':'must_skill','label':skill['name'],'weight':3,'params':{'aliases':skill.get('aliases',[])}} for i,skill in enumerate(draft['must_have_skills'])]
     saved=client.put(f'/api/requisitions/{rid}/scorecard',headers=h,json={'criteria':criteria}).json(); assert saved['version'] == previous['version'] + 1
+def test_recruiter_can_list_applications(client):
+    token=client.post('/api/auth/login',json={'email':'recruiter@companya.demo','password':'Demo@1234'}).json()['access_token']
+    headers={'Authorization':f'Bearer {token}'}
+    requisition=client.get('/api/requisitions',headers=headers).json()[0]
+    response=client.get(f"/api/requisitions/{requisition['id']}/applications",headers=headers)
+    assert response.status_code == 200
+    assert {'items','total','page'} <= response.json().keys()

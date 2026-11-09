@@ -1,5 +1,4 @@
 import re
-from collections.abc import Iterable
 EMAIL=r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'; PHONE=r'(?:\+?91[\s-]?)?[6-9]\d{9}|(?:0\d{2,4}[\s-]?)?\d{6,8}'
 URL=r'https?://[^\s]+|(?:www\.)?linkedin\.com/[^\s]+|(?:www\.)?github\.com/[^\s]+'; HONORIFICS=r'\b(?:mr|mrs|ms|miss|shri|smt)\.?\b'
 PERSONAL_LINE=re.compile(r'^\s*(?:dob|date of birth|age|gender|sex|marital status|father.?s name|mother.?s name|spouse.?s name|husband.?s name|religion|caste|nationality|passport)\s*:',re.I)

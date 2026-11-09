@@ -1,9 +1,8 @@
 import asyncio,hashlib,logging,uuid
 from pathlib import Path
-from sqlalchemy.orm import Session
 from ..ai.provider import get_provider
 from ..db import SessionLocal
-from ..models import Application,Candidate,CvBlob,CvFile,Requisition,UploadBatch,Scorecard,Score
+from ..models import Application,Candidate,CvBlob,CvFile,UploadBatch,Scorecard,Score
 from ..services.dedupe import find_duplicate
 from ..services.parsing import ParseError,parse_file
 from ..services.redaction import redact

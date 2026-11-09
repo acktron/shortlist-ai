@@ -3,8 +3,8 @@ from fastapi import APIRouter,Depends,HTTPException
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user,require_role
-from ..models import User,Role,Requisition,Scorecard,Client,Application,CvFile
-from ..schemas.requisitions import *
+from ..models import User,Role,Requisition,Scorecard,Client,Application,Candidate,Score
+from ..schemas.requisitions import RequisitionCreate,RequisitionOut,ScorecardSave,ScorecardOut
 from ..ai.provider import get_provider
 from ..workers.batch_processor import process_file
 router=APIRouter(prefix='/requisitions',tags=['requisitions'])

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 class Skill(BaseModel): name:str; aliases:list[str]=[]
 class ExperienceRange(BaseModel): min_years:Optional[float]=None; max_years:Optional[float]=None

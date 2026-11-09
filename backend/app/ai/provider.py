@@ -1,5 +1,4 @@
 import logging
-from .schemas import ScorecardDraft,Profile,ScoreResult
 from .mock import MockProvider
 from .ollama import OllamaProvider
 try: from .gemini import GeminiProvider
