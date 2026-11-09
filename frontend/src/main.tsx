@@ -169,7 +169,7 @@ function Scorecard({ req, counts }: { req: Req; counts: Counts }) {
   const updateLocationCriterion = (value: string) => setCriteria(current => current.map(item => item.kind === 'location' ? { ...item, label: 'Location', params: { value } } : item));
   if (tab === 'upload') return <><HubTabs req={req} counts={counts} tab={tab} /><UploadScreen requisitionId={req.id} onBack={() => nav(`/recruiter/requisitions/${req.id}/scorecard`)} /></>;
   if (tab === 'candidates') return <><HubTabs req={req} counts={counts} tab={tab} /><CandidateList id={req.id} /></>;
-  if (tab === 'pipeline') return <><HubTabs req={req} counts={counts} tab={tab} /><CandidateList id={req.id} stageView /></>;
+  if (tab === 'pipeline') return <><HubTabs req={req} counts={counts} tab={tab} /><PipelineBoard requisitionId={req.id} /></>;
   return <><HubTabs req={req} counts={counts} tab={tab} /><main>
     {loading ? <Skeleton rows={6} /> : error ? <ErrorState message={error} retry={() => window.location.reload()} /> : <>
       <div className="card scorecard-card"><div className="scorecard-actions"><div><h2>Job description</h2><p className="muted">Confirm each field against the original JD before saving.</p></div><button type="button" disabled={busy} onClick={() => void extract()}>{busy ? 'Working…' : 'Extract with AI'}</button></div>
@@ -191,7 +191,7 @@ function Scorecard({ req, counts }: { req: Req; counts: Counts }) {
 }
 
 type CandidateRow = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; skills: string[]; score: number | null; band: string | null; needs_review: boolean; review_reasons: string[]; stage: string; criteria: any[]; duplicate_of_id?: string | null };
-function CandidateList({ id, stageView = false }: { id: string; stageView?: boolean }) {
+function CandidateList({ id }: { id: string }) {
   const [items, setItems] = useState<CandidateRow[]>([]); const [q, setQ] = useState(''); const [band, setBand] = useState(''); const [needsReview, setNeedsReview] = useState(''); const [stage, setStage] = useState('');
   const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const load = () => {
@@ -201,7 +201,7 @@ function CandidateList({ id, stageView = false }: { id: string; stageView?: bool
   };
   useEffect(load, [id, band, needsReview, stage]);
   const open = (applicationId: string) => window.location.assign(`/recruiter/applications/${applicationId}`);
-  return <main><PageHeader title={stageView ? 'Pipeline' : 'Candidates'} description={stageView ? 'Current stage for every applicant.' : 'Ranks are suggestions. Nobody is rejected automatically.'} />
+  return <main><PageHeader title="Candidates" description="Ranks are suggestions. Nobody is rejected automatically." />
     <div className="filters"><input placeholder="Search all candidates, including low matches" value={q} onChange={event => setQ(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') load(); }} />
       <select value={band} onChange={event => setBand(event.target.value)}><option value="">All bands</option><option value="strong">Strong match</option><option value="possible">Possible match</option><option value="low">Low match</option></select>
       <select value={needsReview} onChange={event => setNeedsReview(event.target.value)}><option value="">All review states</option><option value="true">Needs review</option><option value="false">No review flag</option></select>
@@ -217,6 +217,47 @@ function CandidateList({ id, stageView = false }: { id: string; stageView?: bool
         <span><StatusBadge status={item.stage} /></span><span><button type="button" className="secondary" onClick={() => open(item.id)}>Review</button></span>
       </div>)}
     </div>}
+  </main>;
+}
+
+type PipelineCard = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; score: number | null; band: string | null; needs_review: boolean; allowed_transitions: string[]; proposed_slots: string[] };
+type PipelineColumn = { stage: string; count: number; applications: PipelineCard[] };
+function PipelineBoard({ requisitionId }: { requisitionId: string }) {
+  const [columns, setColumns] = useState<PipelineColumn[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState(''); const [errors, setErrors] = useState<Record<string, string>>({});
+  const [retryMoves, setRetryMoves] = useState<Record<string, { stage: string; details: { note?: string; confirmed_slot?: string } }>>({});
+  const [pending, setPending] = useState<Record<string, { stage: string; slot: string }>>({});
+  const load = () => { setLoading(true); setError(''); void api<{ columns: PipelineColumn[] }>(`/requisitions/${requisitionId}/pipeline`).then(data => setColumns(data.columns)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load pipeline')).finally(() => setLoading(false)); };
+  useEffect(load, [requisitionId]);
+  async function move(applicationId: string, stage: string, details: { note?: string; confirmed_slot?: string } = {}) {
+    setBusyId(applicationId); setErrors(current => ({ ...current, [applicationId]: '' }));
+    try { await api(`/applications/${applicationId}/stage`, { method: 'POST', body: JSON.stringify({ stage, ...details }) }); setPending(current => { const next = { ...current }; delete next[applicationId]; return next; }); setRetryMoves(current => { const next = { ...current }; delete next[applicationId]; return next; }); load(); }
+    catch (reason) { setErrors(current => ({ ...current, [applicationId]: reason instanceof Error ? reason.message : 'Unable to move candidate' })); setRetryMoves(current => ({ ...current, [applicationId]: { stage, details } })); }
+    finally { setBusyId(''); }
+  }
+  function selectStage(card: PipelineCard, stage: string) {
+    if (!stage) return;
+    if (stage === 'withdrawn') { const note = window.prompt('Why are you withdrawing this candidate?'); if (note?.trim()) void move(card.id, stage, { note: note.trim() }); return; }
+    if (stage === 'interview') { setPending(current => ({ ...current, [card.id]: { stage, slot: card.proposed_slots[0] || '' } })); return; }
+    void move(card.id, stage);
+  }
+  if (loading) return <main><Skeleton rows={5} /></main>;
+  if (error) return <main><ErrorState message={error} retry={load} /></main>;
+  return <main className="pipeline-main"><PageHeader title="Pipeline" description="Move candidates through client review and hiring stages." />
+    <div className="pipeline-scroll" aria-label="Candidate pipeline">
+      {columns.map(column => <section className="pipeline-column" key={column.stage}>
+        <header className="pipeline-column-head"><b>{column.stage.replaceAll('_', ' ')}</b><span>{column.count}</span></header>
+        {column.applications.length === 0 ? <p className="pipeline-empty">No candidates</p> : column.applications.map(card => <article className="pipeline-card" key={card.id}>
+          <div className="pipeline-card-top"><b>{card.candidate_code}</b>{card.needs_review && <StatusBadge status="needs_review" />}</div>
+          <strong>{card.name}</strong><span className="muted">{card.current_role || 'Candidate'} · {card.experience ?? '—'} years</span>
+          <div className="pipeline-card-score">{card.score !== null ? <><b>{card.score}</b><StatusBadge status={card.band || 'low'} /></> : <span className="muted">Not scored</span>}</div>
+          <button type="button" className="secondary review-card" onClick={() => window.location.assign(`/recruiter/applications/${card.id}`)}>Review candidate</button>
+          {card.allowed_transitions.length > 0 && <label className="stage-menu">Move stage<select value="" disabled={busyId === card.id} onChange={event => selectStage(card, event.target.value)}><option value="">Choose stage</option>{card.allowed_transitions.map(stage => <option key={stage} value={stage}>{stage.replaceAll('_', ' ')}</option>)}</select></label>}
+          {pending[card.id]?.stage === 'interview' && <div className="slot-confirm"><label>Confirm a proposed time<select value={pending[card.id].slot} onChange={event => setPending(current => ({ ...current, [card.id]: { stage: 'interview', slot: event.target.value } }))}><option value="">Choose a slot</option>{card.proposed_slots.map(slot => <option key={slot} value={slot}>{new Date(slot).toLocaleString()}</option>)}</select></label><div><button type="button" disabled={busyId === card.id || !pending[card.id].slot} onClick={() => void move(card.id, 'interview', { confirmed_slot: pending[card.id].slot })}>Confirm</button><button type="button" className="link" onClick={() => setPending(current => { const next = { ...current }; delete next[card.id]; return next; })}>Cancel</button></div></div>}
+          {errors[card.id] && <ErrorState message={errors[card.id]} retry={() => { const target = retryMoves[card.id]; if (target) void move(card.id, target.stage, target.details); }} />}
+        </article>)}
+      </section>)}
+    </div>
   </main>;
 }
 

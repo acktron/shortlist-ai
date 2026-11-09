@@ -20,6 +20,7 @@ from ..models import (
     StageEvent,
     User,
 )
+from ..services.pipeline import transition_application, transition_system
 from fastapi import Response
 
 router = APIRouter(tags=["applications"])
@@ -31,6 +32,12 @@ class SubmitRequest(BaseModel):
 
 class WithdrawRequest(BaseModel):
     note: str = Field(min_length=1, max_length=2000)
+
+
+class StageRequest(BaseModel):
+    stage: str = Field(min_length=1, max_length=30)
+    note: str | None = Field(default=None, max_length=2000)
+    confirmed_slot: str | None = Field(default=None, max_length=80)
 
 
 def _application(db: Session, application_id: UUID) -> Application:
@@ -101,9 +108,7 @@ def cv(
     if row.recruiter_opened_at is None:
         row.recruiter_opened_at = datetime.now(timezone.utc)
         if row.stage == "sourced":
-            previous = row.stage
-            row.stage = "screened"
-            db.add(StageEvent(application_id=row.id, from_stage=previous, to_stage="screened", actor_id=user.id, note="Recruiter opened CV"))
+            transition_system(db, row, "screened", user.id, "Recruiter opened CV")
     db.add(AccessLog(user_id=user.id, candidate_id=row.candidate_id, action="view_cv"))
     db.commit()
     file = db.get(CvFile, row.cv_file_id)
@@ -118,16 +123,7 @@ def submit(
     user: User = Depends(require_role(Role.recruiter)),
 ):
     row = _application(db, application_id)
-    if not row.recruiter_opened_at:
-        raise HTTPException(409, detail={"code": "cv_not_opened", "message": "Open the candidate CV before submitting to the client."})
-    if row.stage not in ("sourced", "screened"):
-        raise HTTPException(422, detail={"code": "invalid_transition", "message": "Only sourced or screened candidates can be submitted."})
-    previous = row.stage
-    row.stage = "submitted"
-    row.submitted_at = datetime.now(timezone.utc)
-    row.submitted_by = user.id
-    row.recruiter_note = data.note
-    db.add(StageEvent(application_id=row.id, from_stage=previous, to_stage="submitted", actor_id=user.id, note=data.note))
+    transition_application(db, row, "submitted", user, note=data.note)
     db.commit()
     return {"id": str(row.id), "stage": row.stage}
 
@@ -140,9 +136,20 @@ def withdraw(
     user: User = Depends(require_role(Role.recruiter)),
 ):
     row = _application(db, application_id)
-    previous = row.stage
-    row.stage = "withdrawn"
-    db.add(StageEvent(application_id=row.id, from_stage=previous, to_stage="withdrawn", actor_id=user.id, note=data.note))
+    transition_application(db, row, "withdrawn", user, note=data.note)
+    db.commit()
+    return {"id": str(row.id), "stage": row.stage}
+
+
+@router.post("/applications/{application_id}/stage")
+def move_stage(
+    application_id: UUID,
+    data: StageRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(Role.recruiter)),
+):
+    row = _application(db, application_id)
+    transition_application(db, row, data.stage, user, note=data.note, confirmed_slot=data.confirmed_slot)
     db.commit()
     return {"id": str(row.id), "stage": row.stage}
 

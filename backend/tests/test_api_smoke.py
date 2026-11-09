@@ -34,6 +34,7 @@ def test_every_get_endpoint_works_for_an_authorized_role(client):
         (f"/api/requisitions/{requisition_id}/scorecard", recruiter_headers),
         (f"/api/requisitions/{requisition_id}/summary", recruiter_headers),
         (f"/api/requisitions/{requisition_id}/applications", recruiter_headers),
+        (f"/api/requisitions/{requisition_id}/pipeline", recruiter_headers),
         ("/api/uploads/latest", recruiter_headers),
         (f"/api/uploads/latest?requisition_id={requisition_id}", recruiter_headers),
         (f"/api/uploads/{batch_id}", recruiter_headers),
