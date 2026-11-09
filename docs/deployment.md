@@ -1,6 +1,6 @@
 # Deployment — ShortlistAI
 
-**Live app:** https://YOUR-APP.vercel.app
+**Live app:** https://shortlist-ai-wine.vercel.app
 **API health:** https://shortlist-ai-api.onrender.com/api/health → `{"status":"ok","database":"ok"}`
 **Repo:** https://github.com/acktron/shortlist-ai
 

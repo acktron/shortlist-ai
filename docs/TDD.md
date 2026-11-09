@@ -1,7 +1,7 @@
 # ShortlistAI — Technical Design Document
 
 **GitHub:** https://github.com/acktron/shortlist-ai
-**Live app:** https://YOUR-APP.vercel.app  ·  **API:** https://shortlist-ai-api.onrender.com/api/health
+**Live app:** https://shortlist-ai-wine.vercel.app  ·  **API:** https://shortlist-ai-api.onrender.com/api/health
 **Demo logins** (password `Demo@1234`): Recruiter `recruiter@companya.demo` · Delivery head `head@companya.demo` · Client (Kestrel IT) `rahul@kestrelit.demo` · Client (Meridian Bank) `priya@meridianbank.demo`
 **Problem chosen:** Problem 2 — AI resume screening tool and client shortlist portal for Company A (staffing, Noida).
 
