@@ -3,7 +3,7 @@ from fastapi import APIRouter,Depends,HTTPException
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user,require_role
-from ..models import User,Role,Requisition,Scorecard
+from ..models import User,Role,Requisition,Scorecard,Client
 from ..schemas.requisitions import *
 from ..ai.provider import get_provider
 router=APIRouter(prefix='/requisitions',tags=['requisitions'])
@@ -11,15 +11,16 @@ router=APIRouter(prefix='/requisitions',tags=['requisitions'])
 def listing(db:Session=Depends(get_db),user:User=Depends(get_current_user)):
     q=db.query(Requisition)
     if user.role==Role.client:q=q.filter(Requisition.client_id==user.client_id)
-    return q.order_by(Requisition.created_at.desc()).all()
+    rows=q.order_by(Requisition.created_at.desc()).all(); names={c.id:c.name for c in db.query(Client).all()}
+    return [{**r.__dict__,'client_name':names.get(r.client_id,'')} for r in rows]
 @router.post('',response_model=RequisitionOut)
 def create(data:RequisitionCreate,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
-    row=Requisition(**data.model_dump(),owner_id=user.id);db.add(row);db.commit();db.refresh(row);return row
+    row=Requisition(**data.model_dump(),owner_id=user.id);db.add(row);db.commit();db.refresh(row);return {**row.__dict__,'client_name':db.get(Client,row.client_id).name}
 @router.get('/{rid}',response_model=RequisitionOut)
 def get(rid:UUID,db:Session=Depends(get_db),user:User=Depends(get_current_user)):
     row=db.get(Requisition,rid)
     if not row or (user.role==Role.client and row.client_id!=user.client_id):raise HTTPException(404,'Requisition not found')
-    return row
+    return {**row.__dict__,'client_name':db.get(Client,row.client_id).name}
 @router.post('/{rid}/scorecard/extract')
 async def extract(rid:UUID,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
     row=db.get(Requisition,rid)
