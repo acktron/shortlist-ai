@@ -179,3 +179,68 @@ h3 { font-size: 15px; }
   .page-header h1 { font-size: 24px; }
   .login section { padding: 28px; }
 }
+
+.portal-shell { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom); background: #fafafa; }
+.portal-shell > header { position: sticky; z-index: 2; top: 0; height: 60px; padding: 0 20px; background: #fff; }
+.portal-brand { min-height: 44px; padding: 0; color: #18181b; background: transparent; font-size: 18px; }
+.portal-brand span { color: #3b3bd4; }
+.portal-main { max-width: 760px !important; padding: 24px 20px 110px !important; }
+.portal-main .page-header { margin: 8px 0 20px; }
+.portal-main .page-header h1 { font-size: 25px; }
+.portal-req-list, .portal-cards { display: grid; gap: 12px; }
+.portal-req-card { display: flex; min-height: 76px; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid #e4e4e7; color: #18181b; background: #fff; text-align: left; }
+.portal-req-copy { display: grid; gap: 6px; }
+.portal-req-copy small, .portal-count small { color: #71717a; font-size: 12px; }
+.portal-count { display: grid; justify-items: end; font-size: 17px; }
+.portal-candidate-card { display: grid; gap: 10px; padding: 16px; border: 1px solid #e4e4e7; border-radius: 12px; background: #fff; }
+.portal-candidate-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.portal-candidate-heading > div { display: grid; gap: 3px; }
+.portal-candidate-heading small { color: #71717a; font-size: 11px; }
+.portal-candidate-card h2 { margin: 0; font-size: 15px; }
+.portal-candidate-card p { margin: 0; color: #52525b; font-size: 13px; line-height: 1.5; }
+.portal-summary { padding: 10px; border-radius: 8px; background: #f4f4f5; }
+.portal-candidate-card blockquote { display: grid; gap: 5px; margin: 0; padding: 10px 12px; border-left: 3px solid #86efac; color: #3f3f46; background: #f8fafc; font-size: 12px; line-height: 1.5; }
+.portal-candidate-card blockquote b { font-size: 11px; }
+.portal-review { width: 100%; margin-top: 2px; }
+.portal-back { min-height: 36px; padding-left: 0 !important; }
+.portal-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 18px; }
+.portal-detail-heading h1 { font-size: 25px; }
+.portal-detail-heading p { margin: 5px 0 0; color: #71717a; font-size: 13px; }
+.portal-detail-card { margin: 12px 0; padding: 16px; border: 1px solid #e4e4e7; border-radius: 12px; background: #fff; }
+.portal-detail-card h2 { margin: 0 0 10px; font-size: 15px; }
+.portal-detail-card > p { margin: 0; color: #52525b; font-size: 13px; line-height: 1.6; }
+.portal-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.portal-facts span { display: grid; gap: 5px; min-width: 0; }
+.portal-facts small { color: #71717a; font-size: 10px; }
+.portal-facts b { font-size: 12px; overflow-wrap: anywhere; }
+.portal-skills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.portal-skills span { padding: 5px 9px; border-radius: 99px; color: #3f3f46; background: #f4f4f5; font-size: 11px; }
+.portal-evidence { display: grid; gap: 8px; margin: 10px 0 0; padding: 12px; border: 1px solid #f4f4f5; border-radius: 9px; background: #fafafa; }
+.portal-evidence b { font-size: 12px; }
+.portal-evidence span { color: #3f3f46; font-size: 13px; line-height: 1.5; }
+.portal-evidence .badge { width: max-content; }
+.portal-redacted-cv summary { min-height: 24px; color: #3f3f46; font-size: 13px; font-weight: 600; cursor: pointer; }
+.portal-redacted-cv pre { max-height: 320px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; background: #fafafa; color: #52525b; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.portal-action-bar { position: fixed; z-index: 4; right: 0; bottom: 0; left: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #e4e4e7; background: #ffffffed; backdrop-filter: blur(10px); }
+.portal-action-inner { display: flex; width: min(760px, 100%); gap: 10px; margin: 0 auto; }
+.portal-action-inner button { flex: 1; min-height: 48px; }
+.bottom-sheet-backdrop { position: fixed; z-index: 8; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: #18181b66; }
+.bottom-sheet { display: grid; width: min(680px, 100%); max-height: min(88vh, 760px); gap: 18px; overflow: auto; padding: 10px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; background: #fff; box-shadow: 0 -12px 40px #18181b1c; }
+.sheet-handle { width: 40px; height: 4px; justify-self: center; border-radius: 99px; background: #d4d4d8; }
+.sheet-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sheet-heading h2 { margin: 0; }
+.sheet-heading button { padding: 0 8px; }
+.bottom-sheet label { display: grid; gap: 7px; font-size: 12px; font-weight: 600; }
+.bottom-sheet select { height: 46px; padding: 0 12px; }
+.bottom-sheet textarea { min-height: 88px; resize: vertical; }
+.bottom-sheet > button:last-child { width: 100%; min-height: 48px; }
+.slot-list { display: grid; gap: 12px; }
+.slot-list > p { margin: 0; font-size: 12px; }
+.slot-input { display: flex; align-items: end; gap: 8px; }
+.slot-input label { flex: 1; }
+.slot-input input { width: 100%; }
+.slot-input button { min-height: 40px; padding: 0 8px; }
+.portal-toast { position: fixed; z-index: 6; right: 16px; bottom: 82px; left: 16px; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 12px 16px; border-radius: 10px; color: #fff; background: #27272a; box-shadow: 0 4px 18px #18181b33; font-size: 13px; }
+.portal-status-note { display: flex; align-items: center; gap: 6px; color: #71717a; font-size: 12px; }
+@media (min-width: 900px) { .portal-main { padding-top: 40px !important; } }
+@media (max-width: 420px) { .portal-facts { grid-template-columns: 1fr 1fr; } .portal-facts span:last-child { grid-column: 1 / -1; } .portal-detail-heading h1 { font-size: 22px; } .bottom-sheet { padding-right: 16px; padding-left: 16px; } }

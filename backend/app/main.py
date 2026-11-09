@@ -9,6 +9,7 @@ from .routers.requisitions import router as requisitions_router
 from .routers.uploads import router as uploads_router
 from .routers.applications import router as applications_router
 from .routers.pipeline import router as pipeline_router
+from .routers.portal import router as portal_router
 from .ai.provider import provider_meta
 from .workers.batch_processor import start_workers,stop_workers
 app=FastAPI(title="ShortlistAI API")
@@ -40,6 +41,7 @@ app.include_router(requisitions_router,prefix="/api")
 app.include_router(uploads_router,prefix="/api")
 app.include_router(applications_router,prefix="/api")
 app.include_router(pipeline_router,prefix="/api")
+app.include_router(portal_router,prefix="/api")
 @app.get('/api/meta')
 def meta(): return provider_meta()
 @app.get("/health")

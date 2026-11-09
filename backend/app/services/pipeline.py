@@ -17,6 +17,7 @@ PIPELINE_STAGES = (
     "withdrawn",
 )
 SYSTEM_TRANSITIONS = {"created": ("sourced",), "sourced": ("screened",)}
+CLIENT_VISIBLE_STAGES = frozenset({"submitted", "shortlisted", "interview", "offered", "joined", "client_rejected"})
 
 RECRUITER_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "sourced": ("withdrawn",),

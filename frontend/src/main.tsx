@@ -261,6 +261,76 @@ function PipelineBoard({ requisitionId }: { requisitionId: string }) {
   </main>;
 }
 
+type PortalRequisition = { id: string; title: string; location: string; candidate_count: number };
+type PortalCandidate = { application_id: string; candidate_code: string; name: string; current_role: string; experience_years: number | null; skills: string[]; notice_days: number | null; expected_ctc_lpa: number | null; summary: string; top_evidence: { label: string; verdict: string; quote: string }[]; recruiter_note: string | null; status: string; band: string | null; redacted_cv_text?: string };
+
+function PortalShell({ children }: { children: React.ReactNode }) {
+  return <div className="portal-shell"><header><button type="button" className="portal-brand" onClick={() => window.location.assign('/portal')}>Shortlist<span>AI</span></button><button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></header>{children}</div>;
+}
+
+function PortalRequisitions() {
+  const [rows, setRows] = useState<PortalRequisition[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const load = () => { setLoading(true); setError(''); void api<PortalRequisition[]>('/portal/requisitions').then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load requisitions')).finally(() => setLoading(false)); };
+  useEffect(load, []);
+  return <PortalShell><main className="portal-main"><PageHeader title="Your open roles" description="Review candidates submitted by your recruiting team." />
+    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No candidates are ready for review" /> : <div className="portal-req-list">{rows.map(req => <button type="button" className="portal-req-card" key={req.id} onClick={() => window.location.assign(`/portal/requisitions/${req.id}/candidates`)}><span className="portal-req-copy"><b>{req.title}</b><small>{req.location}</small></span><span className="portal-count">{req.candidate_count}<small>{req.candidate_count === 1 ? 'candidate' : 'candidates'}</small></span></button>)}</div>}
+  </main></PortalShell>;
+}
+
+function PortalCandidates({ requisitionId }: { requisitionId: string }) {
+  const [rows, setRows] = useState<PortalCandidate[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const load = () => { setLoading(true); setError(''); void api<PortalCandidate[]>(`/portal/requisitions/${requisitionId}/candidates`).then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false)); };
+  useEffect(load, [requisitionId]);
+  return <PortalShell><main className="portal-main"><button type="button" className="link portal-back" onClick={() => window.location.assign('/portal')}>← Roles</button><PageHeader title="Candidates" description="Names and contact details are masked in this portal." />
+    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No submitted candidates yet" /> : <div className="portal-cards">{rows.map(candidate => <article className="portal-candidate-card" key={candidate.application_id}><div className="portal-candidate-heading"><div><b>{candidate.name}</b><small>{candidate.candidate_code}</small></div><StatusBadge status={candidate.status} /></div><h2>{candidate.current_role || 'Candidate'}</h2><p>{candidate.experience_years ?? '—'} years · {candidate.skills.slice(0, 5).join(' · ')}</p><p className="portal-summary">{candidate.summary}</p>{candidate.top_evidence.slice(0, 2).map((item, index) => <blockquote key={`${item.label}-${index}`}><b>{item.label}</b>{item.quote}</blockquote>)}<button type="button" className="secondary portal-review" onClick={() => window.location.assign(`/portal/applications/${candidate.application_id}`)}>Review candidate</button></article>)}</div>}
+  </main></PortalShell>;
+}
+
+type PortalAction = 'shortlist' | 'reject' | 'propose_interview';
+function localDateTime(value: Date) { const adjusted = new Date(value.getTime() - value.getTimezoneOffset() * 60000); return adjusted.toISOString().slice(0, 16); }
+function PortalDetail({ applicationId }: { applicationId: string }) {
+  const [data, setData] = useState<PortalCandidate>(); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [sheet, setSheet] = useState<PortalAction | null>(null);
+  const [busy, setBusy] = useState(false); const [toast, setToast] = useState(''); const [feedbackStatus, setFeedbackStatus] = useState(''); const [reason, setReason] = useState(''); const [note, setNote] = useState('');
+  const [slots, setSlots] = useState([localDateTime(new Date(Date.now() + 2 * 86400000))]); const [retryAction, setRetryAction] = useState<() => void>(() => () => {});
+  const load = () => { setLoading(true); setError(''); void api<PortalCandidate>(`/portal/applications/${applicationId}`).then(setData).catch(reason => { setError(reason instanceof Error ? reason.message : 'Unable to load candidate'); setRetryAction(() => () => load()); }).finally(() => setLoading(false)); };
+  useEffect(load, [applicationId]);
+  async function sendFeedback(action: PortalAction) {
+    setBusy(true); setError('');
+    const payload: Record<string, unknown> = { action };
+    if (action === 'reject') { payload.reason_code = reason; payload.note = note; }
+    if (action === 'shortlist') payload.note = note;
+    if (action === 'propose_interview') payload.proposed_slots = slots.filter(Boolean).map(slot => new Date(slot).toISOString());
+    try {
+      const response = await api<{ status: string }>(`/portal/applications/${applicationId}/feedback`, { method: 'POST', body: JSON.stringify(payload) });
+      setFeedbackStatus(response.status); setToast(action === 'shortlist' ? 'Candidate added to your shortlist.' : action === 'reject' ? 'Feedback sent to the recruiting team.' : 'Interview times sent to the recruiting team.'); setSheet(null); setReason(''); setNote(''); await load();
+      window.setTimeout(() => setToast(''), 4000);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to send feedback'); setRetryAction(() => () => { void sendFeedback(action); }); }
+    finally { setBusy(false); }
+  }
+  if (loading) return <PortalShell><main className="portal-main"><Skeleton rows={5} /></main></PortalShell>;
+  if (error && !data) return <PortalShell><main className="portal-main"><ErrorState message={error} retry={retryAction} /></main></PortalShell>;
+  if (!data) return null;
+  const canReview = data.status === 'submitted' || data.status === 'shortlisted';
+  return <PortalShell><main className="portal-main portal-detail-main"><button type="button" className="link portal-back" onClick={() => window.history.back()}>← Candidates</button>
+    <div className="portal-detail-heading"><div><h1>{data.name}</h1><p>{data.candidate_code} · {data.current_role || 'Candidate'}</p></div><StatusBadge status={feedbackStatus || data.status} /></div>
+    {toast && <div className="portal-toast" role="status">{toast}</div>}{error && <ErrorState message={error} retry={retryAction} />}
+    <section className="portal-detail-card"><h2>Summary</h2><p>{data.summary}</p><div className="portal-facts"><span><small>Experience</small><b>{data.experience_years ?? '—'} years</b></span><span><small>Notice period</small><b>{data.notice_days == null ? 'Not provided' : `${data.notice_days} days`}</b></span><span><small>Expected CTC</small><b>{data.expected_ctc_lpa == null ? 'Not provided' : `${data.expected_ctc_lpa} LPA`}</b></span></div><div className="portal-skills">{data.skills.map(skill => <span key={skill}>{skill}</span>)}</div></section>
+    <section className="portal-detail-card"><h2>Top evidence</h2>{data.top_evidence.length ? data.top_evidence.map((item, index) => <blockquote className="portal-evidence" key={`${item.label}-${index}`}><StatusBadge status={item.verdict} /><b>{item.label}</b><span>{item.quote}</span></blockquote>) : <p className="muted">No verified evidence quotes are available.</p>}</section>
+    <section className="portal-detail-card"><h2>Recruiter note</h2><p>{data.recruiter_note || 'No recruiter note was provided.'}</p></section>
+    <details className="portal-detail-card portal-redacted-cv"><summary>View redacted CV text</summary><pre>{data.redacted_cv_text}</pre></details>
+    {!canReview && <p className="portal-status-note">This candidate is now <StatusBadge status={feedbackStatus || data.status} />.</p>}
+  </main>
+  {canReview && <div className="portal-action-bar"><div className="portal-action-inner">{data.status === 'submitted' && <><button type="button" disabled={busy} onClick={() => { setNote(''); setSheet('shortlist'); }}>Shortlist</button><button type="button" className="secondary" disabled={busy} onClick={() => setSheet('reject')}>Reject</button></>}{data.status === 'shortlisted' && <button type="button" disabled={busy} onClick={() => setSheet('propose_interview')}>Propose interview</button>}</div></div>}
+  {sheet && <div className="bottom-sheet-backdrop" onClick={() => !busy && setSheet(null)}><section className="bottom-sheet" role="dialog" aria-modal="true" aria-label={sheet === 'shortlist' ? 'Shortlist candidate' : sheet === 'reject' ? 'Reject candidate' : 'Propose interview'} onClick={event => event.stopPropagation()}><div className="sheet-handle" /><div className="sheet-heading"><h2>{sheet === 'shortlist' ? 'Shortlist candidate' : sheet === 'reject' ? 'Share a rejection reason' : 'Propose interview times'}</h2><button type="button" className="link" disabled={busy} onClick={() => setSheet(null)}>Close</button></div>
+    {sheet === 'reject' && <><label>Reason<select value={reason} onChange={event => setReason(event.target.value)}><option value="">Choose a reason</option><option value="skills_gap">Skills gap</option><option value="experience">Experience</option><option value="notice_period">Notice period</option><option value="ctc">CTC</option><option value="location">Location</option><option value="culture_fit">Culture fit</option><option value="other">Other</option></select></label>{reason === 'other' && <label>Note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Tell the recruiting team more" /></label>}</>}
+    {sheet === 'shortlist' && <label>Optional note<textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Add a note for the recruiting team" /></label>}
+    {sheet === 'propose_interview' && <div className="slot-list"><p className="muted">Offer one to three future times. The recruiter will confirm one.</p>{slots.map((slot, index) => <div className="slot-input" key={index}><label>Option {index + 1}<input type="datetime-local" value={slot} min={localDateTime(new Date())} onChange={event => setSlots(current => current.map((item, i) => i === index ? event.target.value : item))} /></label>{slots.length > 1 && <button type="button" className="link" onClick={() => setSlots(current => current.filter((_, i) => i !== index))}>Remove</button>}</div>)}{slots.length < 3 && <button type="button" className="secondary" onClick={() => setSlots(current => [...current, localDateTime(new Date(Date.now() + (current.length + 2) * 86400000))])}>Add another time</button>}</div>}
+    {error && <ErrorState message={error} retry={retryAction} />}
+    <button type="button" disabled={busy || (sheet === 'reject' && (!reason || (reason === 'other' && !note.trim()))) || (sheet === 'propose_interview' && (slots.some(slot => !slot) || slots.length < 1))} onClick={() => void sendFeedback(sheet)}>{busy ? 'Sending…' : sheet === 'shortlist' ? 'Confirm shortlist' : sheet === 'reject' ? 'Send feedback' : 'Send proposed times'}</button>
+  </section></div>}
+  </PortalShell>;
+}
+
 function CandidateReview({ id }: { id: string }) {
   const [data, setData] = useState<any>(); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [activeQuote, setActiveQuote] = useState(''); const [showModelInput, setShowModelInput] = useState(false); const [note, setNote] = useState(''); const [message, setMessage] = useState('');
   const [retryAction, setRetryAction] = useState<() => void>(() => () => {});
@@ -311,6 +381,11 @@ function HubRoute({ id, tab }: { id: string; tab: string }) {
 }
 
 function App() {
+  const portalApplicationMatch = window.location.pathname.match(/^\/portal\/applications\/([^/]+)$/);
+  if (portalApplicationMatch) return <PortalDetail applicationId={portalApplicationMatch[1]} />;
+  const portalRequisitionMatch = window.location.pathname.match(/^\/portal\/requisitions\/([^/]+)\/candidates$/);
+  if (portalRequisitionMatch) return <PortalCandidates requisitionId={portalRequisitionMatch[1]} />;
+  if (window.location.pathname === '/portal') return <PortalRequisitions />;
   const reviewMatch = window.location.pathname.match(/^\/recruiter\/applications\/([^/]+)$/);
   if (reviewMatch) return <CandidateReview id={reviewMatch[1]} />;
   const hubMatch = window.location.pathname.match(/^\/recruiter\/requisitions\/([^/]+)\/(scorecard|upload|candidates|pipeline)$/);
