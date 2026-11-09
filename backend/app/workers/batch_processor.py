@@ -34,6 +34,8 @@ async def process_file(file_id:uuid.UUID)->None:
         if batch and batch.requisition_id and not db.query(Application).filter_by(requisition_id=batch.requisition_id,candidate_id=candidate.id).first():
             db.add(Application(requisition_id=batch.requisition_id,candidate_id=candidate.id,cv_file_id=file.id,stage='sourced'))
         app=db.query(Application).filter_by(requisition_id=batch.requisition_id,candidate_id=candidate.id).first() if batch else None
+        if batch and not app:
+            app=Application(requisition_id=batch.requisition_id,candidate_id=candidate.id,cv_file_id=file.id,stage='sourced');db.add(app);db.flush()
         scorecard=db.query(Scorecard).filter_by(requisition_id=batch.requisition_id,is_active=True).first() if batch else None
         if app and scorecard:
             scoring_input=f'<cv>{redacted}</cv>'
