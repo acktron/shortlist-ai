@@ -1,24 +1,34 @@
 # ShortlistAI status
 
-## Working
+Last verified: 2026-11-09
 
-- Recruiter login, requisitions, scorecard versioning, bulk PDF/DOCX upload, parsing, duplicate handling, redaction, scoring, evidence review, and candidate ranking.
-- Candidate profile/CV access logging, recruiter submission gate, stage history, and pipeline transitions.
-- Client portal scoped to the client company, with masked identities/contact details, verified evidence, shortlist/reject feedback, and interview proposals.
-- Delivery head calibration, candidate access logs, consent status, and candidate data deletion.
-- Responsive recruiter, client, and insights screens at 375px and 1440px.
+## Current capabilities
 
-## Final verification (2026-11-09)
+- Recruiter workflows for requisitions, scorecards, bulk PDF/DOCX uploads, parsing, duplicate handling, redaction, evidence review, candidate ranking, and submission to clients.
+- Client portal scoped to each client company, with masked candidate details, evidence quotes, shortlist/reject feedback, and interview proposals.
+- Candidate profile/CV access logging, recruiter CV-open submission gate, stage history, pipeline transitions, calibration insights, consent status, and candidate data deletion.
+- Mobile-friendly recruiter, client, and insights screens.
+- Pluggable mock, Ollama, and Gemini providers. Gemini uses structured Pydantic responses, bounded retries for transient errors, concurrency control, and a health check command (`python -m app.ai.check`). Evidence is verified against CV text and final scores are computed by the backend.
+- Render backend Docker configuration, Neon-compatible PostgreSQL URLs, database-backed health check, Vercel SPA rewrites, production JWT checks, security headers, and production login rate limiting.
 
-- `python -m seed.seed --reset`: 2 clients, 4 users, 3 requisitions, 30 seeded candidates, 30 seeded applications, 35 CV files, 53 stage events, and 12 access logs.
-- `pytest -q`: 54 passed, twice. `npm run build` and `pyflakes backend/app backend/tests` passed.
-- API walkthrough: uploaded and processed 3 new fictional CVs; retrieved the ranked top five; opened a top-five CV, submitted it, confirmed the client saw a masked profile, shortlisted it, and confirmed the recruiter pipeline move. All four demo logins returned the expected role-scoped views.
-- Local services are running at `http://localhost:5173` and `http://localhost:8000`.
+## Verification
 
-## Known limits and mocked behavior
+- `pytest -q`: 64 passed on two consecutive runs.
+- `npm run build`: passed. Vite reports existing React Router `use client` directives as ignored warnings.
+- `docker build -t shortlist-ai-backend ./backend`: passed.
+- `python -m app.ai.check`: completed one real Gemini scorecard extraction and one CV score with `gemini-2.5-flash`.
+- Git history credential-pattern scan: no matching committed secrets found across 520 reachable Git objects.
+- The local API and frontend are running at `http://localhost:8000` and `http://localhost:5173`.
 
-- The local API currently uses Ollama (`qwen2.5:7b`). The three walkthrough uploads processed successfully. Tests and the default seed pipeline use the deterministic mock provider; pass `--ai` to seed with the configured provider.
-- `GeminiProvider` currently delegates to the mock provider; production Gemini integration is not implemented.
-- Scanned-PDF OCR is deterministic in mock mode. Real image-to-text OCR is not yet wired into the Ollama provider.
-- Interview times are proposed in the portal and confirmed by a recruiter; there is no calendar integration or invitation delivery.
-- CV blobs are stored in PostgreSQL for the demo rather than object storage. Demo users share the password documented in `docs/SPEC.md`.
+## Gemini seed run
+
+`AI_MODE=gemini` is configured in the local, gitignored `backend/.env`. The requested `python -m seed.seed --reset --ai` run selected the three brief candidates and five additional candidates for real AI processing; the remaining generated CVs use the mock provider. The configured Gemini key returned quota-related HTTP 429 errors during the seed run, including after retries. Those eight selected files correctly ended as `failed` with `ai_unavailable`; there are no real-AI scores or evidence quotes to report for them from this run. The check command had succeeded earlier. Retry those files or rerun the AI seed after Gemini quota is available.
+
+Tests always use the deterministic mock provider. The ordinary seed command also uses mock AI unless `--ai` is supplied. The local database currently contains the reset seed data, including the failed AI files.
+
+## Known limits
+
+- Interview times can be proposed and confirmed in the app; calendar integration and invitation delivery are not implemented.
+- CV blobs are stored in PostgreSQL for this demo rather than object storage.
+- Live Gemini extraction and scoring were verified by the check command. The full AI seed was blocked by the configured account's quota, and scanned-PDF transcription was not separately exercised against the live service.
+- Demo users share the password documented in `docs/SPEC.md`; production should use separate credentials and a production secret.
