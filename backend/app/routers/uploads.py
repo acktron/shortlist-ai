@@ -37,11 +37,6 @@ def progress(batch_id:UUID,db:Session=Depends(get_db),user:User=Depends(require_
     if not batch:raise HTTPException(404,'Upload batch not found')
     rows=db.query(CvFile).filter_by(batch_id=batch_id).all();done=sum(r.status in ('done','duplicate','needs_review','failed') for r in rows);batch.processed=done;batch.failed=sum(r.status=='failed' for r in rows);batch.duplicates=sum(r.status=='duplicate' for r in rows);batch.status='done' if done==batch.total else 'processing';db.commit()
     return {'batch_id':str(batch.id),'status':batch.status,'total':batch.total,'processed':done,'failed':batch.failed,'duplicates':batch.duplicates,'needs_review':sum(r.status=='needs_review' for r in rows),'parsed':sum(r.status=='done' for r in rows),'files':[_file(r,db.get(Candidate,r.candidate_id) if r.candidate_id else None,db) for r in rows]}
-@router.get('/uploads/latest')
-def latest(db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
-    batch=db.query(UploadBatch).order_by(UploadBatch.created_at.desc()).first()
-    if not batch: return None
-    return progress(batch.id,db,user)
 @router.post('/cv-files/{file_id}/retry')
 def retry(file_id:UUID,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
     row=db.get(CvFile,file_id)

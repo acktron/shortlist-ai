@@ -1,2 +1,35 @@
-from .models import *
+from .models import (
+    AccessLog,
+    Application,
+    Candidate,
+    Client,
+    ClientFeedback,
+    CvBlob,
+    CvFile,
+    DeletionRequest,
+    Requisition,
+    Role,
+    Score,
+    Scorecard,
+    StageEvent,
+    UploadBatch,
+    User,
+)
 
+__all__ = [
+    "AccessLog",
+    "Application",
+    "Candidate",
+    "Client",
+    "ClientFeedback",
+    "CvBlob",
+    "CvFile",
+    "DeletionRequest",
+    "Requisition",
+    "Role",
+    "Score",
+    "Scorecard",
+    "StageEvent",
+    "UploadBatch",
+    "User",
+]
