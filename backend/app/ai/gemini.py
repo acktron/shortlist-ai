@@ -2,6 +2,8 @@
 
 import asyncio
 import random
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from weakref import WeakKeyDictionary
 from typing import Any, TypeVar
 
@@ -56,7 +58,25 @@ def _status_code(error: Exception) -> int | None:
 
 def _is_retryable(error: Exception) -> bool:
     status = _status_code(error)
-    return status == 429 or (status is not None and 500 <= status < 600)
+    return status is not None and 500 <= status < 600
+
+
+def _retry_after_seconds(error: Exception) -> float | None:
+    response = getattr(error, "response", None)
+    headers = getattr(response, "headers", None)
+    raw_value = headers.get("Retry-After") if headers is not None else None
+    if raw_value is None:
+        return None
+    try:
+        return max(0.0, float(raw_value))
+    except (TypeError, ValueError):
+        try:
+            retry_at = parsedate_to_datetime(str(raw_value))
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return None
 
 
 class GeminiProvider:
@@ -120,11 +140,17 @@ class GeminiProvider:
             except Exception as error:
                 if isinstance(error, AIUnavailableError):
                     raise
+                status = _status_code(error)
+                if status == 429:
+                    raise AIUnavailableError(
+                        "Gemini rate limit reached.",
+                        status_code=429,
+                        retry_after_seconds=_retry_after_seconds(error),
+                    ) from error
                 if _is_retryable(error) and attempt + 1 < MAX_ATTEMPTS:
                     delay = 0.5 * (2**attempt) + random.uniform(0, 0.25 * (2**attempt))
                     await asyncio.sleep(delay)
                     continue
-                status = _status_code(error)
                 if status == 429 or (status is not None and status >= 500):
                     detail = f"Gemini is temporarily unavailable after retries (HTTP {status})."
                 elif status in (401, 403):
@@ -133,7 +159,7 @@ class GeminiProvider:
                     detail = f"Gemini rejected the request (HTTP {status}); check GEMINI_MODEL and the response schema."
                 else:
                     detail = "Gemini request failed; check the provider configuration and retry."
-                raise AIUnavailableError(detail) from error
+                raise AIUnavailableError(detail, status_code=status) from error
         raise AIUnavailableError("Gemini request failed after retries.")
 
     async def extract_scorecard(self, jd: str) -> ScorecardDraft:

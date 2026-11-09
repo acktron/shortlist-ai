@@ -62,6 +62,8 @@ For production, set `ENV=production`, provide a unique `JWT_SECRET`, a Neon `DAT
 
 `./.venv/bin/python -m app.ai.check` (from `backend/`) makes one scorecard extraction and one CV scoring request with the configured provider and prints results with latency. It uses real Gemini calls when `AI_MODE=gemini`.
 
+Gemini's free tier can rate-limit larger batches. If you hit free-tier limits, set `GEMINI_MODEL=gemini-2.5-flash-lite` and retry after the quota window resets.
+
 ## Tests and build
 
 Tests always select the deterministic mock provider:

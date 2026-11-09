@@ -1,5 +1,5 @@
 import asyncio,hashlib,logging,re,uuid
-from typing import Any
+from typing import Any,Awaitable,Callable,TypeVar
 from pathlib import Path
 from ..ai.provider import get_provider
 from ..ai.errors import AIProviderError
@@ -13,7 +13,20 @@ from ..services.scoring import compute_score,experience_verdict
 from ..config import settings
 log=logging.getLogger(__name__)
 queue:asyncio.Queue[uuid.UUID]=asyncio.Queue();worker_tasks:list[asyncio.Task]=[]
+RATE_LIMIT_MAX_RETRIES=5
+DEFAULT_RATE_LIMIT_WAIT_SECONDS=20
+ResultT=TypeVar('ResultT')
 def enqueue(file_id:uuid.UUID)->None:queue.put_nowait(file_id)
+
+async def _call_ai(call:Callable[...,Awaitable[ResultT]],*args:Any,**kwargs:Any)->ResultT:
+    retries=0
+    while True:
+        try:return await call(*args,**kwargs)
+        except AIProviderError as exc:
+            if getattr(exc,'status_code',None)!=429 or retries>=RATE_LIMIT_MAX_RETRIES:raise
+            delay=getattr(exc,'retry_after_seconds',None)
+            await asyncio.sleep(DEFAULT_RATE_LIMIT_WAIT_SECONDS if delay is None else max(0.0,float(delay)))
+            retries+=1
 
 def _source_line(text:str, pattern:str)->str:
     return next((line.strip()[:200] for line in text.splitlines() if re.search(pattern,line,re.I)), '')
@@ -72,11 +85,11 @@ async def process_file(file_id:uuid.UUID)->None:
         if duplicate.kind=='exact':file.candidate_id=duplicate.existing_candidate.id if duplicate.existing_candidate else None;file.status='duplicate';db.commit();return
         source_text=parsed.text
         if parsed.parse_method=='ocr_ai':
-            source_text=await get_provider().transcribe_scan(blob.data)
+            source_text=await _call_ai(get_provider().transcribe_scan,blob.data)
             if not source_text.strip():raise ParseError('empty','No readable text could be transcribed from this CV.')
             parsed.text=source_text
-            profile=await get_provider().extract_profile(source_text)
-        else: profile=await get_provider().extract_profile(source_text)
+            profile=await _call_ai(get_provider().extract_profile,source_text)
+        else: profile=await _call_ai(get_provider().extract_profile,source_text)
         duplicate=find_duplicate(db,file.sha256,profile,parsed.text,file.id)
         if duplicate.kind=='exact':
             file.candidate_id=duplicate.existing_candidate.id if duplicate.existing_candidate else None;file.status='duplicate';db.commit();return
@@ -99,11 +112,13 @@ async def process_file(file_id:uuid.UUID)->None:
             app=Application(requisition_id=batch.requisition_id,candidate_id=candidate.id,cv_file_id=file.id,stage='sourced');db.add(app);db.flush()
             db.add(StageEvent(application_id=app.id,from_stage='created',to_stage='sourced',actor_id=batch.uploaded_by,note='CV uploaded'))
         scorecard=db.query(Scorecard).filter_by(requisition_id=batch.requisition_id,is_active=True).first() if batch else None
+        # Keep the parsed profile and application if AI scoring hits a rate limit.
+        db.commit()
         if app and scorecard:
             scoring_text=candidate.redacted_text or ''
             scoring_input=f'<cv>{scoring_text}</cv>'
             skill_criteria=[item for item in scorecard.criteria if item.get('kind') in ('must_skill','nice_skill')]
-            model_result=await get_provider().score_cv(scoring_text,{'criteria':skill_criteria})
+            model_result=await _call_ai(get_provider().score_cv,scoring_text,{'criteria':skill_criteria})
             by_id={item.criterion_id:item for item in model_result.criteria}
             verdicts=[];missing_criteria=False
             for item in scorecard.criteria:
@@ -134,7 +149,10 @@ async def process_file(file_id:uuid.UUID)->None:
         if file:file.status='failed';file.error_code=exc.code;file.error_message=str(exc);db.commit()
     except AIProviderError as exc:
         db.rollback();file=db.get(CvFile,file_id)
-        if file:file.status='failed';file.error_code='ai_unavailable';file.error_message=str(exc);db.commit()
+        if file:
+            file.status='failed';file.error_code='ai_unavailable'
+            file.error_message='AI busy — Retry' if getattr(exc,'status_code',None)==429 else str(exc)
+            db.commit()
     except Exception as exc:
         db.rollback();file=db.get(CvFile,file_id)
         if file:file.status='failed';file.error_code='processing_error';file.error_message=str(exc);db.commit()

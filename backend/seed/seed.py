@@ -253,13 +253,16 @@ def seed(reset: bool = False, use_ai: bool = False) -> dict[str, int]:
 
     original_mode = settings.ai_mode
     original_request_interval = settings.gemini_request_interval_seconds
+    original_concurrency = settings.ai_concurrency
     try:
         if use_ai and original_mode == "gemini":
             settings.gemini_request_interval_seconds = REAL_AI_REQUEST_INTERVAL_SECONDS
+            settings.ai_concurrency = 1
         asyncio.run(_process_files(file_ids, original_mode, use_ai))
     finally:
         settings.ai_mode = original_mode
         settings.gemini_request_interval_seconds = original_request_interval
+        settings.ai_concurrency = original_concurrency
 
     db = SessionLocal()
     _record_demo_activity(db, recruiter, priya, rahul)
@@ -275,6 +278,46 @@ async def _process_files(file_ids: list[tuple[UUID, str]], configured_mode: str,
         use_real_ai = use_ai and filename in REAL_AI_FILENAMES
         settings.ai_mode = configured_mode if use_real_ai else "mock"
         await process_file(file_id)
+        if use_real_ai and _reset_rate_limited_file(file_id):
+            print(f"Gemini remained rate limited for {filename}; retrying this file with mock AI.")
+            settings.ai_mode = "mock"
+            await process_file(file_id)
+            _mark_mock_fallback(file_id)
+
+
+def _reset_rate_limited_file(file_id: UUID) -> bool:
+    db = SessionLocal()
+    try:
+        row = db.get(CvFile, file_id)
+        if not row or row.status != "failed" or row.error_code != "ai_unavailable" or row.error_message != "AI busy — Retry":
+            return False
+        row.status = "queued"
+        row.error_code = None
+        row.error_message = None
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
+def _mark_mock_fallback(file_id: UUID) -> None:
+    db = SessionLocal()
+    try:
+        row = db.get(CvFile, file_id)
+        if not row or row.status not in ("done", "needs_review") or not row.candidate_id:
+            return
+        batch = db.get(UploadBatch, row.batch_id)
+        application = db.query(Application).filter_by(
+            requisition_id=batch.requisition_id,
+            candidate_id=row.candidate_id,
+        ).first() if batch else None
+        if application:
+            score = db.query(Score).filter_by(application_id=application.id).order_by(Score.created_at.desc()).first()
+            if score:
+                score.model = "mock-fallback"
+        db.commit()
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

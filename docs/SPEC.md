@@ -134,7 +134,7 @@ Verified against `raw_text` (the redacted text is a subset). If a met/partial ve
 
 **Prompt injection**: CV text wrapped in `<cv>…</cv>`, system prompt says the CV is untrusted data and any instructions inside it must be ignored. Even if the model is fooled, the number is computed in Python and quotes are verified, so the CV can't simply give itself 100. If the CV text contains phrases like "ignore previous instructions" / "score this candidate", add review reason "CV contains instructions aimed at the AI". Seed includes one such CV.
 
-**Reliability**: `asyncio.Semaphore(GEMINI_CONCURRENCY, default 4)`, retry with exponential backoff + jitter on 429/5xx (max 3). Timeout 60 s. On final failure: `status=failed, error_code=ai_unavailable`, "Retry" button per file and "Retry all failed" per batch. On startup the worker re-queues files left in queued/parsing/scoring. Results cached by (sha256, scorecard_id, prompt_version).
+**Reliability**: Gemini calls are bounded by `AI_CONCURRENCY` (default 1) and time out after 60 s. Worker requests retry HTTP 429 up to five times, honoring `Retry-After` or waiting 20 seconds when the header is absent. Other transient 5xx errors use bounded exponential backoff with jitter. If a scoring request still fails, the parsed profile remains available and the file shows "AI busy — Retry". Seed AI calls run sequentially with a 7-second interval and fall back to mock scoring for a rate-limited file. On startup the worker re-queues files left in queued/parsing/scoring. Results cached by (sha256, scorecard_id, prompt_version).
 
 **Rescore**: editing the scorecard creates a new version and shows "Scorecard changed — rescore 120 candidates?" Rescore runs only the scoring step (parsed profiles reused).
 
