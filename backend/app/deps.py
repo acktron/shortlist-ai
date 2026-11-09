@@ -11,7 +11,7 @@ def get_current_user(creds:HTTPAuthorizationCredentials|None=Depends(bearer),db:
     try: uid=jwt.decode(creds.credentials,settings.jwt_secret,algorithms=["HS256"])["sub"]
     except (jwt.InvalidTokenError,KeyError): raise HTTPException(401,"Invalid or expired token")
     user=db.get(User,uid)
-    if not user: raise HTTPException(401,"Invalid or expired token")
+    if not user: raise HTTPException(401,detail={'code':'session_expired','message':'Your session expired, please sign in again.'})
     return user
 def require_role(*roles:Role):
     def guard(user:User=Depends(get_current_user)):
