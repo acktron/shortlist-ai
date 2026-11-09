@@ -4,8 +4,11 @@ from app.models import Client,User,Role,Requisition,Scorecard
 import argparse
 pwd=CryptContext(schemes=["bcrypt"],deprecated="auto")
 def seed(reset:bool=False):
-    if reset: Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine); db=SessionLocal(); meridian=Client(name="Meridian Bank",industry="Banking"); kestrel=Client(name="Kestrel IT Services",industry="IT services"); db.add_all([meridian,kestrel]); db.flush()
+    Base.metadata.create_all(engine); db=SessionLocal()
+    if reset:
+        for table in reversed(Base.metadata.sorted_tables): db.execute(table.delete())
+        db.commit()
+    meridian=Client(name="Meridian Bank",industry="Banking"); kestrel=Client(name="Kestrel IT Services",industry="IT services"); db.add_all([meridian,kestrel]); db.flush()
     recruiter=User(email="recruiter@companya.demo",full_name="Demo Recruiter",role=Role.recruiter,password_hash=pwd.hash("Demo@1234")); head=User(email="head@companya.demo",full_name="Demo Delivery Head",role=Role.delivery_head,password_hash=pwd.hash("Demo@1234")); priya=User(email="priya@meridianbank.demo",full_name="Priya Sharma",role=Role.client,client_id=meridian.id,password_hash=pwd.hash("Demo@1234")); rahul=User(email="rahul@kestrelit.demo",full_name="Rahul Mehta",role=Role.client,client_id=kestrel.id,password_hash=pwd.hash("Demo@1234")); db.add_all([recruiter,head,priya,rahul]); db.flush()
     java=Requisition(client_id=kestrel.id,owner_id=recruiter.id,title='Senior Java Developer',location='Noida',jd_text='Senior Java Developer, Noida, 5-8 yrs, Java, Spring Boot, microservices, notice 60 days or less',openings=1)
     kyc=Requisition(client_id=meridian.id,owner_id=recruiter.id,title='KYC Analyst',location='Noida',jd_text='KYC Analyst, Noida, 2-5 yrs, KYC, AML, Excel, notice 30 days or less',openings=1); db.add_all([java,kyc]);db.flush()

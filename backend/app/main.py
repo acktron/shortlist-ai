@@ -24,7 +24,12 @@ log=logging.getLogger(__name__)
 async def provider_startup_check():
     if settings.ai_mode=='ollama':
         try:
-            async with httpx.AsyncClient(timeout=2) as client: await client.get(f'{settings.ollama_base_url}/api/tags')
+            async with httpx.AsyncClient(timeout=2) as client:
+                response = await client.get(f'{settings.ollama_base_url}/api/tags')
+                response.raise_for_status()
+                models = {item.get('name') for item in response.json().get('models', [])}
+                if settings.ollama_model not in models and f'{settings.ollama_model}:latest' not in models:
+                    raise RuntimeError(f'Ollama model {settings.ollama_model} is not installed')
         except Exception as exc:
             log.warning('Ollama unavailable; falling back to mock provider: %s',exc); settings.ai_mode='mock'
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(",")],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
@@ -34,5 +39,6 @@ app.include_router(uploads_router,prefix="/api")
 @app.get('/api/meta')
 def meta(): return provider_meta()
 @app.get("/health")
+@app.get("/api/health")
 def health(): return {"status":"ok"}
 
