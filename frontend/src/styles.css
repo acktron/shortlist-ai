@@ -26,6 +26,8 @@ h3 { font-size: 15px; }
 .chip { min-height: 34px; padding: 0 10px; color: #3f3f46; background: #f4f4f5; font-size: 12px; }
 .shell header { display: flex; height: 64px; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid #e4e4e7; }
 .shell header .brand { margin: 0; }
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.ai-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid #e4e4e7; border-radius: 999px; color: #52525b; background: #fafafa; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .shell main:not(.login) { width: 100%; max-width: 1180px; margin: 0 auto; padding: 32px 40px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
 .page-header p { margin: 6px 0 0; font-size: 13px; }

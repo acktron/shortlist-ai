@@ -33,7 +33,7 @@ async def extract(rid:UUID,db:Session=Depends(get_db),user:User=Depends(require_
     row=db.get(Requisition,rid)
     if not row:raise HTTPException(404,'Requisition not found')
     try:
-        draft=await get_provider().extract_scorecard(row.jd_text); return {'draft':draft,'warning':None}
+        draft=await get_provider().extract_scorecard(row.jd_text); return {'draft':draft.model_dump(exclude_none=True),'warning':None}
     except Exception as e:return {'draft':{'title':row.title,'location':row.location,'experience':{},'must_have_skills':[],'nice_to_have_skills':[],'ctc':{},'notice':{},'field_confidence':{},'missing_fields':[]},'warning':str(e)}
 @router.get('/{rid}/scorecard',response_model=ScorecardOut)
 def active_scorecard(rid:UUID,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):

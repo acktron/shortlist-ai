@@ -67,7 +67,20 @@ function Login() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="shell"><header><div className="brand">Shortlist<span>AI</span></div><div className="header-actions">{roleFromStorage() === 'delivery_head' && <button type="button" className="secondary" onClick={() => window.location.assign('/insights')}>Insights</button>}<button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></div></header>{children}</div>;
+  return <div className="shell"><header><div className="brand">Shortlist<span>AI</span></div><div className="header-actions"><AIStatusBadge />{roleFromStorage() === 'delivery_head' && <button type="button" className="secondary" onClick={() => window.location.assign('/insights')}>Insights</button>}<button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></div></header>{children}</div>;
+}
+
+type ProviderMeta = { ai_mode: string; model: string };
+function AIStatusBadge() {
+  const [provider, setProvider] = useState<ProviderMeta>();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void api<ProviderMeta>('/meta').then(value => { if (active) setProvider(value); }).catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, []);
+  const label = provider?.ai_mode === 'gemini' ? `Gemini · ${provider.model}` : provider?.ai_mode === 'ollama' ? 'Local AI' : provider?.ai_mode === 'mock' ? 'Demo AI' : failed ? 'AI status unavailable' : 'Checking AI…';
+  return <span className="ai-badge" aria-live="polite">{label}</span>;
 }
 
 function roleFromStorage(): string | undefined {
@@ -301,7 +314,7 @@ type PortalRequisition = { id: string; title: string; location: string; candidat
 type PortalCandidate = { application_id: string; candidate_code: string; name: string; current_role: string; experience_years: number | null; skills: string[]; notice_days: number | null; expected_ctc_lpa: number | null; score_summary: ScoreSummaryData | null; top_evidence: { label: string; verdict: string; quote: string }[]; recruiter_note: string | null; status: string; band: string | null; redacted_cv_text?: string };
 
 function PortalShell({ children }: { children: React.ReactNode }) {
-  return <div className="portal-shell"><header><button type="button" className="portal-brand" onClick={() => window.location.assign('/portal')}>Shortlist<span>AI</span></button><button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></header>{children}</div>;
+  return <div className="portal-shell"><header><button type="button" className="portal-brand" onClick={() => window.location.assign('/portal')}>Shortlist<span>AI</span></button><div className="header-actions"><AIStatusBadge /><button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></div></header>{children}</div>;
 }
 
 function PortalRequisitions() {

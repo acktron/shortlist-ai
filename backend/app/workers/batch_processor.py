@@ -2,6 +2,7 @@ import asyncio,hashlib,logging,re,uuid
 from typing import Any
 from pathlib import Path
 from ..ai.provider import get_provider
+from ..ai.errors import AIProviderError
 from ..db import SessionLocal
 from ..models import Application,Candidate,CvBlob,CvFile,UploadBatch,Scorecard,Score,StageEvent,Requisition
 from ..services.dedupe import find_duplicate
@@ -89,7 +90,7 @@ async def process_file(file_id:uuid.UUID)->None:
             while db.query(Candidate).filter_by(candidate_code=code).first():
                 suffix+=1
                 code=f'CND-{(int(file.sha256[:10],16)+suffix)%100000:05d}'
-            candidate=Candidate(candidate_code=code,full_name=profile.full_name,email=profile.email,phone=profile.phone,current_role=profile.current_role,total_exp_years=profile.total_exp_years,skills=profile.skills,notice_days=profile.notice_days,current_ctc_lpa=profile.current_ctc_lpa,expected_ctc_lpa=profile.expected_ctc_lpa,location=profile.location,experience=profile.experience,education=profile.education,raw_text=parsed.text,redacted_text=redacted,parse_confidence=parsed.parse_confidence,duplicate_of_id=duplicate.duplicate_of.id if duplicate.kind=='possible' else None,consent_status='pending')
+            candidate=Candidate(candidate_code=code,full_name=profile.full_name,email=profile.email,phone=profile.phone,current_role=profile.current_role,total_exp_years=profile.total_exp_years,skills=profile.skills,notice_days=profile.notice_days,current_ctc_lpa=profile.current_ctc_lpa,expected_ctc_lpa=profile.expected_ctc_lpa,location=profile.location,experience=[item.model_dump() for item in profile.experience],education=[item.model_dump() for item in profile.education],raw_text=parsed.text,redacted_text=redacted,parse_confidence=parsed.parse_confidence,duplicate_of_id=duplicate.duplicate_of.id if duplicate.kind=='possible' else None,consent_status='pending')
             db.add(candidate);db.flush()
         file.candidate_id=candidate.id;file.status='needs_review' if duplicate.kind=='possible' or parsed.parse_confidence=='low' else 'done'
         batch=db.get(UploadBatch,file.batch_id)
@@ -111,7 +112,7 @@ async def process_file(file_id:uuid.UUID)->None:
                     if model_verdict is None:
                         current='unknown';evidence=[];reason='The AI did not return a verdict for this criterion.';missing_criteria=True
                     else:
-                        current=model_verdict.verdict;evidence=model_verdict.evidence;reason=model_verdict.reason
+                        current=model_verdict.verdict;evidence=[item.model_dump() for item in model_verdict.evidence];reason=model_verdict.reason
                     verdicts.append(_verify_scoring_evidence({'criterion_id':item.get('id'),'kind':item.get('kind'),'label':item.get('label',''),'weight':item.get('weight',1),'verdict':current,'evidence':evidence,'reason':reason},scoring_text))
                 else:
                     verdict=_numeric_verdict(item,candidate,db.get(Requisition,batch.requisition_id),parsed.text)
@@ -131,6 +132,9 @@ async def process_file(file_id:uuid.UUID)->None:
     except ParseError as exc:
         db.rollback();file=db.get(CvFile,file_id)
         if file:file.status='failed';file.error_code=exc.code;file.error_message=str(exc);db.commit()
+    except AIProviderError as exc:
+        db.rollback();file=db.get(CvFile,file_id)
+        if file:file.status='failed';file.error_code='ai_unavailable';file.error_message=str(exc);db.commit()
     except Exception as exc:
         db.rollback();file=db.get(CvFile,file_id)
         if file:file.status='failed';file.error_code='processing_error';file.error_message=str(exc);db.commit()

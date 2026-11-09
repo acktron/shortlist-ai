@@ -55,7 +55,7 @@ def test_mock_evidence_is_the_cv_line_not_only_the_skill_name():
     criteria = {"criteria": [{"id": "java", "kind": "must_skill", "label": "Java", "weight": 3, "params": {}}]}
     source_line = "Built Java services for the payments platform and reduced processing latency by 30%."
     result = asyncio.run(provider.score_cv(f"Experience: 4.0 years\n{source_line}", criteria))
-    quote = result.criteria[0].evidence[0]["quote"]
+    quote = result.criteria[0].evidence[0].quote
     assert quote == source_line
     assert len(quote) <= 200
 

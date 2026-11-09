@@ -4,6 +4,7 @@ import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import UUID
 
 from passlib.context import CryptContext
 from app.config import settings
@@ -29,6 +30,17 @@ from seed.generate_cvs import main as generate_cvs
 
 pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 CV_DIR = Path(__file__).parent / "cvs"
+REAL_AI_FILENAMES = {
+    "ritika_bansal.pdf",
+    "arjun_rawat.docx",
+    "pooja_nair.pdf",
+    "java_01.pdf",
+    "java_02.pdf",
+    "kyc_01.pdf",
+    "kyc_02.pdf",
+    "react_01.pdf",
+}
+REAL_AI_REQUEST_INTERVAL_SECONDS = 7
 
 
 def _criteria(kind: str) -> list[dict]:
@@ -235,17 +247,19 @@ def seed(reset: bool = False, use_ai: bool = False) -> dict[str, int]:
             db.add(row)
             db.flush()
             db.add(CvBlob(cv_file_id=row.id, data=data))
-            file_ids.append(row.id)
+            file_ids.append((row.id, path.name))
     db.commit()
     db.close()
 
     original_mode = settings.ai_mode
-    if not use_ai:
-        settings.ai_mode = "mock"
+    original_request_interval = settings.gemini_request_interval_seconds
     try:
-        asyncio.run(_process_files(file_ids))
+        if use_ai and original_mode == "gemini":
+            settings.gemini_request_interval_seconds = REAL_AI_REQUEST_INTERVAL_SECONDS
+        asyncio.run(_process_files(file_ids, original_mode, use_ai))
     finally:
         settings.ai_mode = original_mode
+        settings.gemini_request_interval_seconds = original_request_interval
 
     db = SessionLocal()
     _record_demo_activity(db, recruiter, priya, rahul)
@@ -256,8 +270,10 @@ def seed(reset: bool = False, use_ai: bool = False) -> dict[str, int]:
     return summary
 
 
-async def _process_files(file_ids) -> None:
-    for file_id in file_ids:
+async def _process_files(file_ids: list[tuple[UUID, str]], configured_mode: str, use_ai: bool) -> None:
+    for file_id, filename in file_ids:
+        use_real_ai = use_ai and filename in REAL_AI_FILENAMES
+        settings.ai_mode = configured_mode if use_real_ai else "mock"
         await process_file(file_id)
 
 
