@@ -235,7 +235,11 @@ All seed data is fictional [A6].
 
 ## 9. Environment variables (names only)
 
-Backend: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_MIN`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `AI_MODE` (gemini|mock), `GEMINI_CONCURRENCY`, `CORS_ORIGINS`, `MAX_UPLOAD_MB`, `MAX_BATCH_FILES`
+Backend: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_MIN`, `AI_MODE` (ollama|gemini|mock), `AI_CONCURRENCY`,
+`OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `CORS_ORIGINS`, `MAX_UPLOAD_MB`, `MAX_BATCH_FILES`
+
+Note: wherever this spec says "Gemini", read "the configured AI provider". Local dev uses Ollama (concurrency 1–2, it is slower);
+production uses Gemini. Switching is only an env change: `AI_MODE=gemini` + `GEMINI_API_KEY` + `GEMINI_MODEL`.
 Frontend: `VITE_API_URL`
 
 ---

@@ -9,9 +9,13 @@ shortlist to the client, who reviews it in a mobile-friendly portal. Fair, expla
 ## Stack (do not change without being asked)
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2.0 (typed `Mapped[]`), Alembic, Pydantic v2, pytest
 - DB: PostgreSQL (Neon in prod, Docker Postgres locally). JSONB for scorecard/criteria.
-- AI: Google Gemini via the `google-genai` SDK, structured JSON output (`response_schema`), temperature 0.
-  Model name comes from env `GEMINI_MODEL`. All AI calls go through `app/ai/provider.py`.
-  `AI_MODE=mock` swaps in a deterministic fake provider (used by tests and when no key is set).
+- AI: pluggable provider chosen by env `AI_MODE` = `ollama` | `gemini` | `mock`. All AI calls go through `app/ai/provider.py`;
+  no other file may import an AI SDK. Every provider returns the same Pydantic-validated objects.
+  - `ollama` (current dev default): local Ollama at `OLLAMA_BASE_URL` (default http://localhost:11434), model `OLLAMA_MODEL`
+    (default `qwen2.5:7b`), vision model `OLLAMA_VISION_MODEL` (default `qwen2.5vl:7b`) for scanned PDFs (render pages to PNG
+    with `pypdfium2`). Use the `/api/chat` endpoint with `format` = the JSON schema, `options.temperature=0`, `stream=false`, via `httpx`.
+  - `gemini` (production, switched on before deploy): `google-genai` SDK, `response_schema` JSON output, temperature 0, model `GEMINI_MODEL`.
+  - `mock`: deterministic fake provider used by tests (tests must never call a real model).
 - Parsing: `pdfplumber` (PDF text), `python-docx` (DOCX incl. tables), `rapidfuzz` (fuzzy match), Gemini multimodal for scanned PDFs.
 - Auth: email + password (bcrypt via `passlib`), JWT access token (`pyjwt`), role on the user.
 - Frontend: React 18 + Vite + TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, React Router, lucide-react icons.
@@ -26,7 +30,7 @@ backend/
     schemas/       # Pydantic request/response models
     routers/       # auth, requisitions, scorecards, uploads, applications, portal, pipeline, compliance, insights
     services/      # parsing.py, redaction.py, dedupe.py, scoring.py, evidence.py, pipeline.py, audit.py
-    ai/            # provider.py (interface), gemini.py, mock.py, prompts.py (versioned prompts)
+    ai/            # provider.py (interface + factory), ollama.py, gemini.py, mock.py, prompts.py (versioned, shared by all providers)
     workers/       # batch_processor.py (async queue for CV processing)
   alembic/
   seed/            # seed.py, generate_cvs.py, cvs/ (fictional generated files)

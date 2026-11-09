@@ -37,9 +37,13 @@ Do not build later phases. Give me the exact commands to run backend, frontend a
 
 ```
 Build Phase 2 per SPEC §3.1, §5, screens 2 and 3.
-- app/ai/provider.py interface with methods: extract_scorecard, transcribe_scan, extract_profile, score_cv.
-  gemini.py using google-genai with response_schema JSON output, temperature 0, timeout, retry with backoff on 429/5xx.
-  mock.py deterministic keyword-based implementation of the same schema. Choose by AI_MODE; fall back to mock if no key, and expose /api/meta with ai_mode so the UI can show a "Demo AI" badge.
+- app/ai/provider.py interface + factory with methods: extract_scorecard, transcribe_scan, extract_profile, score_cv.
+  ollama.py (default now): httpx to OLLAMA_BASE_URL /api/chat, format = JSON schema from the Pydantic model, temperature 0,
+  stream false, timeout 120s, validate with Pydantic and retry once with the validation error. Vision model for transcribe_scan.
+  gemini.py: google-genai with response_schema JSON output, temperature 0, retry with backoff on 429/5xx (built now, used at deploy).
+  mock.py deterministic keyword-based implementation of the same schema (used by tests).
+  Choose by AI_MODE; if the chosen provider is unreachable at startup, log a warning and fall back to mock. Expose /api/meta
+  with ai_mode + model so the UI shows a small badge ("Local AI · qwen2.5:7b" / "Demo AI").
   prompts.py holds versioned prompts (PROMPT_VERSION constant).
 - Requisition CRUD, scorecard extract (returns draft + field_confidence + missing_fields), save as new version, get active.
 - Default weights from SPEC. If the AI call fails, return an empty draft plus a warning; the UI must still allow manual entry.
