@@ -1,8 +1,9 @@
 import asyncio,hashlib,logging,re,uuid
+from typing import Any
 from pathlib import Path
 from ..ai.provider import get_provider
 from ..db import SessionLocal
-from ..models import Application,Candidate,CvBlob,CvFile,UploadBatch,Scorecard,Score,StageEvent
+from ..models import Application,Candidate,CvBlob,CvFile,UploadBatch,Scorecard,Score,StageEvent,Requisition
 from ..services.dedupe import find_duplicate
 from ..services.parsing import ParseError,parse_file
 from ..services.redaction import redact
@@ -12,6 +13,50 @@ from ..config import settings
 log=logging.getLogger(__name__)
 queue:asyncio.Queue[uuid.UUID]=asyncio.Queue();worker_tasks:list[asyncio.Task]=[]
 def enqueue(file_id:uuid.UUID)->None:queue.put_nowait(file_id)
+
+def _source_line(text:str, pattern:str)->str:
+    return next((line.strip()[:200] for line in text.splitlines() if re.search(pattern,line,re.I)), '')
+
+def _numeric_verdict(item:dict[str,Any],candidate:Candidate,requisition:Any,raw_text:str)->dict[str,Any]|None:
+    kind=item.get('kind');params=item.get('params') or {};value=None;quote='';verdict='unknown';reason='The CV does not include this information.'
+    if kind=='experience':
+        value=candidate.total_exp_years;quote=_source_line(raw_text,r'\b(?:total\s+)?experience\s*:')
+        low=params.get('min_years');high=params.get('max_years')
+        if value is not None and low is not None and high is not None:
+            years=float(value)
+            if float(low)<=years<=float(high):verdict='met';reason=f'{years:g} years is within the requested range.'
+            elif float(low)-1<=years<float(low) or years>float(high):verdict='partial';reason='Experience is close to or above the requested range.'
+            else:verdict='not_met';reason='Experience is below the requested range.'
+    elif kind=='notice':
+        value=candidate.notice_days;quote=_source_line(raw_text,r'notice(?:\s+period)?\s*:');maximum=params.get('max_days')
+        if value is not None and maximum is not None:
+            if value<=int(maximum):verdict='met';reason=f'{value} days is within the notice limit.'
+            elif value<=int(maximum)+30:verdict='partial';reason='Notice period is up to 30 days above the limit.'
+            else:verdict='not_met';reason='Notice period is more than 30 days above the limit.'
+    elif kind=='ctc':
+        value=candidate.expected_ctc_lpa;quote=_source_line(raw_text,r'expected\s+ctc\s*:');maximum=params.get('max_lpa')
+        if value is not None and maximum is not None:
+            if float(value)<=float(maximum):verdict='met';reason='Expected CTC is within the budget.'
+            elif float(value)<=float(maximum)*1.1:verdict='partial';reason='Expected CTC is within 10% of the budget.'
+            else:verdict='not_met';reason='Expected CTC is more than 10% above the budget.'
+    elif kind=='location':
+        value=candidate.location;quote=_source_line(raw_text,r'^\s*location\s*:') or _source_line(raw_text,r'open to relocat')
+        if value:
+            same_city=bool(requisition and requisition.location and value.casefold()==requisition.location.casefold())
+            can_relocate=bool(re.search(r'open to relocat',raw_text,re.I))
+            verdict='met' if same_city or can_relocate else 'partial'
+            reason='Location matches the role.' if same_city else 'Relocation can be discussed.'
+    else:return None
+    evidence=[{'quote':quote}] if quote else []
+    return {'criterion_id':item.get('id'),'kind':kind,'label':item.get('label',''),'weight':item.get('weight',1),'verdict':verdict,'evidence':evidence,'reason':reason}
+
+def _verify_scoring_evidence(verdict:dict[str,Any],raw_text:str)->dict[str,Any]:
+    evidence=verify_evidence(verdict.get('evidence',[]),raw_text)
+    result={**verdict,'evidence':evidence}
+    if result.get('verdict') in ('met','partial') and not any(item['verified'] for item in evidence):
+        result['verdict']='unverified'
+    return result
+
 async def process_file(file_id:uuid.UUID)->None:
     db=SessionLocal()
     try:
@@ -55,15 +100,27 @@ async def process_file(file_id:uuid.UUID)->None:
         if app and scorecard:
             scoring_text=candidate.redacted_text or ''
             scoring_input=f'<cv>{scoring_text}</cv>'
-            model_result=await get_provider().score_cv(scoring_text,{'criteria':scorecard.criteria})
-            verdicts=[]
-            for verdict in model_result.criteria:
-                item=next((c for c in scorecard.criteria if c.get('id')==verdict.criterion_id),{})
-                evidence=verify_evidence(verdict.evidence,parsed.raw_text if hasattr(parsed,'raw_text') else parsed.text)
-                current=verdict.verdict
-                if current in ('met','partial') and not any(x['verified'] for x in evidence): current='unverified'
-                verdicts.append({'criterion_id':verdict.criterion_id,'kind':item.get('kind'),'label':item.get('label',verdict.criterion_id),'weight':item.get('weight',1),'verdict':current,'evidence':evidence,'reason':verdict.reason})
+            skill_criteria=[item for item in scorecard.criteria if item.get('kind') in ('must_skill','nice_skill')]
+            model_result=await get_provider().score_cv(scoring_text,{'criteria':skill_criteria})
+            by_id={item.criterion_id:item for item in model_result.criteria}
+            verdicts=[];missing_criteria=False
+            for item in scorecard.criteria:
+                model_verdict=by_id.get(item.get('id'))
+                if item.get('kind') in ('must_skill','nice_skill'):
+                    if model_verdict is None:
+                        current='unknown';evidence=[];reason='The AI did not return a verdict for this criterion.';missing_criteria=True
+                    else:
+                        current=model_verdict.verdict;evidence=model_verdict.evidence;reason=model_verdict.reason
+                    verdicts.append(_verify_scoring_evidence({'criterion_id':item.get('id'),'kind':item.get('kind'),'label':item.get('label',''),'weight':item.get('weight',1),'verdict':current,'evidence':evidence,'reason':reason},parsed.text))
+                else:
+                    verdict=_numeric_verdict(item,candidate,db.get(Requisition,batch.requisition_id),parsed.text)
+                    if verdict is not None:
+                        verdicts.append(_verify_scoring_evidence(verdict,parsed.text))
             result=compute_score(verdicts)
+            if any(item.get('verdict')=='unverified' for item in verdicts):
+                result['review_reasons'].append("AI evidence couldn't be found in the CV")
+            if missing_criteria:
+                result['needs_review']=True;result['confidence']='low';result['review_reasons'].append('AI returned an incomplete scorecard response')
             if parsed.parse_confidence=='low':
                 result['needs_review']=True;result['confidence']='low'
                 result['review_reasons'].extend(reason for reason in parsed.review_reasons if reason not in result['review_reasons'])

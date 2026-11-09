@@ -4,7 +4,7 @@ from fastapi import APIRouter,Depends,File,HTTPException,UploadFile
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import require_role
-from ..models import User,Role,Requisition,UploadBatch,CvFile,CvBlob,Candidate
+from ..models import User,Role,Requisition,UploadBatch,CvFile,CvBlob,Candidate,Application
 from ..services.parsing import ParseError,validate_file
 from ..workers.batch_processor import enqueue
 from ..config import settings
@@ -13,7 +13,9 @@ def _file(row:CvFile,candidate:Candidate|None=None,db:Session|None=None):
     duplicate_of = None
     if row.status == 'duplicate' and candidate and db:
         original = db.query(CvFile).filter(CvFile.candidate_id == candidate.id, CvFile.id != row.id, CvFile.status != 'duplicate').order_by(CvFile.created_at.asc()).first()
-        duplicate_of = {'filename': original.filename if original else None, 'candidate_code': candidate.candidate_code}
+        batch=db.get(UploadBatch,row.batch_id)
+        application=db.query(Application).filter_by(requisition_id=batch.requisition_id,candidate_id=candidate.id).first() if batch else None
+        duplicate_of = {'filename': original.filename if original else None, 'candidate_code': candidate.candidate_code,'application_id':str(application.id) if application else None}
     return {'id':str(row.id),'filename':row.filename,'status':row.status,'error_code':row.error_code,'error_message':row.error_message,'parse_method':row.parse_method,'candidate_id':str(row.candidate_id) if row.candidate_id else None,'redacted_text':candidate.redacted_text if candidate else None,'duplicate_of':duplicate_of}
 @router.post('/requisitions/{rid}/uploads')
 async def upload(rid:UUID,files:list[UploadFile]=File(...),db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
@@ -28,8 +30,12 @@ async def upload(rid:UUID,files:list[UploadFile]=File(...),db:Session=Depends(ge
     for file_id in queued_ids: enqueue(file_id)
     return {'batch_id':str(batch.id),'total':batch.total,'files':[_file(row,db=db) for row in db.query(CvFile).filter_by(batch_id=batch.id).all()]}
 @router.get('/uploads/latest')
-def latest_first(db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
-    batch=db.query(UploadBatch).order_by(UploadBatch.created_at.desc()).first()
+def latest_first(requisition_id:UUID|None=None,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
+    query=db.query(UploadBatch)
+    if requisition_id:
+        if not db.get(Requisition,requisition_id):raise HTTPException(404,'Requisition not found')
+        query=query.filter_by(requisition_id=requisition_id)
+    batch=query.order_by(UploadBatch.created_at.desc()).first()
     return progress(batch.id,db,user) if batch else None
 @router.get('/uploads/{batch_id}')
 def progress(batch_id:UUID,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):

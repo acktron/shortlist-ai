@@ -1,5 +1,4 @@
 from io import BytesIO
-from pathlib import Path
 from app.db import SessionLocal
 from app.models import Requisition, Candidate, CvFile, UploadBatch
 def auth(client):

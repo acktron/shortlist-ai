@@ -22,7 +22,7 @@ def schema():
         cv=CvFile(batch_id=batch.id,candidate_id=candidate.id,filename='smoke.pdf',mime='application/pdf',size_bytes=4,sha256='smoke-hash',status='done',attempts=0);db.add(cv);db.flush()
         db.add(CvBlob(cv_file_id=cv.id,data=b'%PDF'))
         application=Application(requisition_id=req.id,candidate_id=candidate.id,cv_file_id=cv.id,stage='submitted',recruiter_opened_at=datetime.now(timezone.utc),submitted_at=datetime.now(timezone.utc),submitted_by=recruiter.id);db.add(application);db.flush()
-        db.add(Score(application_id=application.id,scorecard_id=db.query(Scorecard).filter_by(requisition_id=req.id,is_active=True).one().id,total=100,coverage=1,band='strong',confidence='high',needs_review=False,review_reasons=[],criteria=[{'criterion_id':'java','label':'Java','verdict':'met','points':3,'max_points':3,'evidence':[{'quote':'Java','verified':True,'match_score':100}]}],scoring_input='<cv>Java Developer</cv>',model='mock',prompt_version='test',latency_ms=0))
+        db.add(Score(application_id=application.id,scorecard_id=db.query(Scorecard).filter_by(requisition_id=req.id,is_active=True).one().id,total=100,coverage=1,band='strong',confidence='high',needs_review=False,review_reasons=[],criteria=[{'criterion_id':'java','label':'Java','verdict':'met','points':3,'max_points':3,'evidence':[{'quote':'Java','verified':True,'match_score':100}]}],scoring_input=f'<cv>{candidate.redacted_text}</cv>',model='mock',prompt_version='test',latency_ms=0))
         db.commit()
     yield
     Base.metadata.drop_all(engine)
@@ -32,5 +32,7 @@ def client(schema):
     def override():
         yield session
     app.dependency_overrides[get_db]=override
-    with TestClient(app) as test_client: yield test_client
+    with TestClient(app) as test_client:
+        test_client.db_session=session
+        yield test_client
     app.dependency_overrides.clear();session.close();transaction.rollback();connection.close()
