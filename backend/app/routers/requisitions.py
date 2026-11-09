@@ -8,6 +8,7 @@ from ..schemas.requisitions import RequisitionCreate,RequisitionOut,ScorecardSav
 from ..ai.provider import get_provider
 from ..workers.batch_processor import process_file
 from ..services.scoring import build_score_summary
+from ..services.pipeline import stage_entered_at
 router=APIRouter(prefix='/requisitions',tags=['requisitions'])
 @router.get('',response_model=list[RequisitionOut])
 def listing(db:Session=Depends(get_db),user:User=Depends(get_current_user)):
@@ -86,7 +87,7 @@ def applications(rid:UUID,q:str|None=None,band:str|None=None,needs_review:bool|N
         if needs_review is not None and bool(score and score.needs_review)!=needs_review:continue
         if stage and app.stage!=stage:continue
         must_have_met=sum(item.get('kind')=='must_skill' and item.get('verdict')=='met' for item in (score.criteria or [])) if score else 0
-        result.append({'id':str(app.id),'candidate_id':str(candidate.id),'candidate_code':candidate.candidate_code,'name':candidate.full_name,'current_role':candidate.current_role,'experience':float(candidate.total_exp_years) if candidate.total_exp_years is not None else None,'skills':candidate.skills or [],'notice_days':candidate.notice_days,'score':score.total if score else None,'coverage':float(score.coverage) if score and score.coverage is not None else None,'must_have_met':must_have_met,'band':score.band if score else None,'score_summary':build_score_summary(score.total if score else None,score.band if score else None,score.criteria or [] if score else []),'needs_review':bool(score and score.needs_review),'review_reasons':score.review_reasons or [] if score else [],'stage':app.stage,'recruiter_opened_at':app.recruiter_opened_at,'duplicate_of_id':str(candidate.duplicate_of_id) if candidate.duplicate_of_id else None,'criteria':score.criteria if score else []})
+        result.append({'id':str(app.id),'candidate_id':str(candidate.id),'candidate_code':candidate.candidate_code,'name':candidate.full_name,'current_role':candidate.current_role,'experience':float(candidate.total_exp_years) if candidate.total_exp_years is not None else None,'skills':candidate.skills or [],'notice_days':candidate.notice_days,'score':score.total if score else None,'coverage':float(score.coverage) if score and score.coverage is not None else None,'must_have_met':must_have_met,'band':score.band if score else None,'score_summary':build_score_summary(score.total if score else None,score.band if score else None,score.criteria or [] if score else []),'needs_review':bool(score and score.needs_review),'review_reasons':score.review_reasons or [] if score else [],'stage':app.stage,'stage_entered_at':stage_entered_at(db,app),'recruiter_opened_at':app.recruiter_opened_at,'duplicate_of_id':str(candidate.duplicate_of_id) if candidate.duplicate_of_id else None,'criteria':score.criteria if score else []})
     if sort=='name':result.sort(key=lambda x:(x['name'] or '').casefold())
     elif sort=='stage':result.sort(key=lambda x:x['stage'])
     else:result.sort(key=lambda x:(-(x['score'] if x['score'] is not None else -1),-(x['coverage'] or 0),-x['must_have_met'],x['candidate_code'] or ''))

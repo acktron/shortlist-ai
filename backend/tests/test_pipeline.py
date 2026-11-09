@@ -134,3 +134,37 @@ def test_pipeline_groups_cards_and_includes_empty_columns(client):
     data = response.json()
     assert [column["stage"] for column in data["columns"]] == ["sourced", "screened", "submitted", "shortlisted", "interview", "offered", "joined", "client_rejected", "withdrawn"]
     assert sum(column["count"] for column in data["columns"]) == data["total"]
+
+
+def test_stage_entered_at_uses_latest_event_in_pipeline_and_application_responses(client):
+    token = _token(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    with SessionLocal() as db:
+        application = db.query(Application).first()
+        recruiter = db.query(User).filter_by(email="recruiter@companya.demo").one()
+        requisition_id = application.requisition_id
+        application_id = application.id
+        previous = db.query(StageEvent).filter_by(application_id=application_id).order_by(StageEvent.created_at.desc()).first()
+        previous_at = previous.created_at if previous else datetime.now(timezone.utc)
+        if previous_at.tzinfo is None:
+            previous_at = previous_at.replace(tzinfo=timezone.utc)
+        expected = (max(datetime.now(timezone.utc), previous_at) + timedelta(seconds=1)).replace(microsecond=0)
+        db.add(StageEvent(
+            application_id=application_id,
+            from_stage="test_previous",
+            to_stage=application.stage,
+            actor_id=recruiter.id,
+            note="stage timestamp test",
+            created_at=expected,
+        ))
+        db.commit()
+
+    pipeline = client.get(f"/api/requisitions/{requisition_id}/pipeline", headers=headers).json()
+    item = next(card for column in pipeline["columns"] for card in column["applications"] if card["id"] == str(application_id))
+    detail = client.get(f"/api/applications/{application_id}", headers=headers).json()
+    listed = client.get(f"/api/requisitions/{requisition_id}/applications", headers=headers).json()
+    listed_item = next(row for row in listed["items"] if row["id"] == str(application_id))
+
+    for payload in (item, detail, listed_item):
+        actual = datetime.fromisoformat(payload["stage_entered_at"])
+        assert actual.replace(tzinfo=None) == expected.replace(tzinfo=None)

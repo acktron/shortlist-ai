@@ -20,7 +20,7 @@ from ..models import (
     StageEvent,
     User,
 )
-from ..services.pipeline import transition_application, transition_system
+from ..services.pipeline import stage_entered_at, transition_application, transition_system
 from ..services.evidence import normalize_criteria_evidence
 from ..services.scoring import build_score_summary
 from fastapi import Response
@@ -83,6 +83,7 @@ def detail(
         "skills": candidate.skills or [],
         "notice_days": candidate.notice_days,
         "stage": row.stage,
+        "stage_entered_at": stage_entered_at(db, row),
         "recruiter_note": row.recruiter_note,
         "recruiter_opened_at": row.recruiter_opened_at,
         "raw_text": candidate.raw_text,

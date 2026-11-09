@@ -58,6 +58,16 @@ def allowed_transitions(db: Session, application: Application, role: Role) -> li
     return []
 
 
+def stage_entered_at(db: Session, application: Application) -> datetime | None:
+    event = (
+        db.query(StageEvent)
+        .filter_by(application_id=application.id)
+        .order_by(StageEvent.created_at.desc())
+        .first()
+    )
+    return event.created_at if event else application.created_at
+
+
 def transition_application(
     db: Session,
     application: Application,
