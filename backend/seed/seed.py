@@ -220,10 +220,11 @@ def seed(reset: bool = False, use_ai: bool = False) -> dict[str, int]:
     db.add_all([recruiter, head, priya, rahul])
     db.flush()
 
+    seeded_at = datetime.now(timezone.utc)
     requisitions = [
-        Requisition(client_id=kestrel.id, owner_id=recruiter.id, title="Senior Java Developer", location="Noida", jd_text="Senior Java Developer, Noida, 5-8 years, Java, Spring Boot, Microservices, Kafka, AWS, notice 60 days or less, budget up to 28 LPA", openings=3),
-        Requisition(client_id=meridian.id, owner_id=recruiter.id, title="KYC Analyst", location="Noida", jd_text="KYC Analyst, Noida, 2-5 years, KYC, AML, Excel, CDD, sanctions screening, notice 30 days or less", openings=2),
-        Requisition(client_id=kestrel.id, owner_id=recruiter.id, title="React Frontend Developer", location="Gurugram", jd_text="React Frontend Developer, Gurugram, 3-6 years, React, TypeScript, JavaScript, accessibility, notice 45 days or less", openings=2),
+        Requisition(client_id=kestrel.id, owner_id=recruiter.id, title="Senior Java Developer", location="Noida", jd_text="Senior Java Developer, Noida, 5-8 years, Java, Spring Boot, Microservices, Kafka, AWS, notice 60 days or less, budget up to 28 LPA", openings=3, created_at=seeded_at - timedelta(days=2)),
+        Requisition(client_id=meridian.id, owner_id=recruiter.id, title="KYC Analyst", location="Noida", jd_text="KYC Analyst, Noida, 2-5 years, KYC, AML, Excel, CDD, sanctions screening, notice 30 days or less", openings=2, created_at=seeded_at - timedelta(days=6)),
+        Requisition(client_id=kestrel.id, owner_id=recruiter.id, title="React Frontend Developer", location="Gurugram", jd_text="React Frontend Developer, Gurugram, 3-6 years, React, TypeScript, JavaScript, accessibility, notice 45 days or less", openings=2, created_at=seeded_at - timedelta(days=11)),
     ]
     db.add_all(requisitions)
     db.flush()

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Circle, FileText, Users } from 'lucide-react';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import { api, login } from './api/client';
 import { AppTopBar, ContentsNav, EmptyState, ErrorState, PageHeader, ScoreSummary, Skeleton, StatusBadge, Toast, type ScoreSummaryData } from './components/shared';
 import { UploadScreen } from './components/upload';

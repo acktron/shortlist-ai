@@ -1,7 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-:root { font-family: Inter, system-ui, sans-serif; color: #18181b; background: #fff; font-synthesis: none; --ink: #0A0A0A; --muted: #6B6B6B; --border: #E5E5E5; --surface: #FAFAFA; --accent: #000000; --radius: 12px; --space: 8px; }
+:root { font-family: "Geist Variable", sans-serif; color: #18181b; background: #fff; font-synthesis: none; --ink: #0A0A0A; --muted: #6B6B6B; --border: #E5E5E5; --surface: #FAFAFA; --accent: #000000; --radius: 12px; --space: 8px; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input, textarea, select { font: inherit; }
@@ -87,7 +85,7 @@ h3 { font-size: 15px; }
 .candidate-row small { display: block; margin-top: 4px; color: #71717a; }
 .score-cell { display: grid; gap: 6px; }
 .score-track, .progress { height: 5px; overflow: hidden; border-radius: 99px; background: #e4e4e7; }
-.score-track > div, .progress > div { height: 100%; border-radius: 99px; background: #000000; }
+.score-track > div, .progress > div { height: 100%; border-radius: 99px; background: #6B6B6B; }
 .criteria-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .criteria-chips .badge { padding: 3px 7px; font-size: 10px; }
 .review-tag { width: max-content; padding: 3px 7px; border: 1px solid #fde68a; border-radius: 99px; color: #92400e !important; background: #fffbeb; }
@@ -118,7 +116,7 @@ h3 { font-size: 15px; }
 .review-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 18px; }
 .review-summary { display: flex; align-items: center; gap: 8px; }
 .review-grid .card { min-width: 0; margin: 0; }
-.cv-panel pre, .evidence-panel pre, .drawer pre { max-height: 70vh; overflow: auto; color: #3f3f46; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-panel pre, .evidence-panel pre, .drawer pre { max-height: 70vh; overflow: auto; color: #3f3f46; font: 13px/1.7 "Geist Variable", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cv-panel pre { padding: 16px; border: 1px solid #f4f4f5; border-radius: 8px; background: #fafafa; }
 .cv-panel mark { border-radius: 2px; color: #18181b; background: #fde68a; }
 .panel-heading h2, .evidence-panel h2 { margin: 0; }
@@ -246,7 +244,7 @@ h3 { font-size: 15px; }
 .portal-evidence .badge { width: max-content; }
 .portal-detail-card > .score-summary { margin: 4px 0 12px; }
 .portal-redacted-cv summary { min-height: 24px; color: #3f3f46; font-size: 13px; font-weight: 600; cursor: pointer; }
-.portal-redacted-cv pre { max-height: 320px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; background: #fafafa; color: #52525b; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.portal-redacted-cv pre { max-height: 320px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; background: #fafafa; color: #52525b; font: 12px/1.6 "Geist Variable", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
 .portal-action-bar { position: fixed; z-index: 4; right: 0; bottom: 0; left: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #e4e4e7; background: #ffffffed; backdrop-filter: blur(10px); }
 .portal-action-inner { display: flex; width: min(760px, 100%); gap: 10px; margin: 0 auto; }
 .portal-action-inner button { flex: 1; min-height: 48px; }
@@ -315,7 +313,7 @@ h3 { margin: 0; font-size: 16px; line-height: 1.35; }
 small, .text-xs { font-size: 12px; }
 button, input, textarea, select { font-size: 14px; }
 button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid var(--accent); border-radius: 8px; color: #fff; background: var(--accent); font-weight: 600; transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease; }
-button:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); }
 button.secondary { border: 1px solid var(--border); color: #27272a; background: #fff; }
 button.secondary:hover:not(:disabled) { border-color: #a1a1aa; color: var(--ink); background: #fafafa; }
 button.link { min-height: 36px; padding: 0 8px; border-color: transparent; color: #52525b; background: transparent; font-weight: 500; }
@@ -341,7 +339,7 @@ textarea { line-height: 1.55; }
 .card { padding: 22px; }
 .req-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 4px; }
 .req-card { min-width: 0; min-height: 180px; gap: 10px; padding: 20px; text-align: left; transition: border-color .15s ease, box-shadow .15s ease; }
-.req-card:hover { border-color: #a1a1aa; background: #fff; box-shadow: 0 4px 16px #18181b0a; }
+.req-card:hover { border-color: var(--ink); background: var(--card); box-shadow: none; }
 .req-title-row { align-items: flex-start; }
 .req-title-row strong { font-size: 16px; line-height: 1.35; }
 .req-location { color: #52525b !important; font-size: 13px; }
@@ -350,7 +348,7 @@ textarea { line-height: 1.55; }
 .req-metrics small { color: #71717a; font-size: 11px; }
 .req-metrics b { color: var(--ink); font-size: 16px; font-weight: 600; }
 .req-open { display: flex; align-items: center; gap: 6px; margin-top: auto; color: #52525b; font-size: 12px; font-weight: 600; }
-.req-card:hover .req-open { color: #27272a; }
+.req-card:hover .req-open { color: var(--ink); }
 .modal-card { border-radius: 12px; box-shadow: 0 18px 50px #18181b18; }
 .tabs { display: flex; gap: 24px; overflow: hidden; padding: 0 0 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .tabs button { flex: 0 1 auto; min-height: 44px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #71717a; background: transparent; font-size: 14px; font-weight: 500; }
@@ -377,7 +375,7 @@ textarea { line-height: 1.55; }
 .filter-chips button:hover:not(:disabled) { color: var(--ink); background: #f4f4f5; }
 .filter-chips button.active { border-color: #000000; color: #000000; background: #FAFAFA; }
 .keyboard-hint { margin: 8px 0 12px; color: #71717a; font-size: 12px; }
-kbd { display: inline-block; min-width: 18px; padding: 1px 4px; border: 1px solid #d4d4d8; border-radius: 4px; color: #52525b; background: #fafafa; font: 11px ui-monospace, monospace; text-align: center; }
+kbd { display: inline-block; min-width: 18px; padding: 1px 4px; border: 1px solid #d4d4d8; border-radius: 4px; color: #52525b; background: #fafafa; font: 11px "Geist Mono Variable", monospace; text-align: center; }
 .candidate-table { overflow: visible; border: 1px solid var(--border); border-radius: 12px; }
 .candidate-head, .candidate-row { grid-template-columns: 46px minmax(150px, 1.25fr) minmax(130px, 1.05fr) minmax(90px, .72fr) minmax(160px, 1.4fr) minmax(100px, .8fr) 78px; gap: 12px; padding: 0 14px; }
 .candidate-head { position: sticky; z-index: 3; top: 64px; min-height: 42px; border-radius: 12px 12px 0 0; background: #fafafa; }
@@ -503,7 +501,7 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 4px; border: 1px soli
 .portal-main .page-header h1 { font-size: 28px; }
 .portal-req-list, .portal-cards { gap: 12px; }
 .portal-req-card { min-height: 80px; padding: 16px; border-radius: 12px; text-align: left; }
-.portal-req-card:hover { border-color: #a1a1aa; background: #fff; }
+.portal-req-card:hover { border-color: var(--ink); background: var(--card); }
 .portal-req-card > svg { flex: 0 0 auto; color: #71717a; }
 .portal-req-copy b { font-size: 15px; }
 .portal-count { color: #27272a; font-size: 16px; }
@@ -650,12 +648,11 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 4px; border: 1px soli
   --muted: #6B6B6B;
   --border: #E5E5E5;
   --accent: #000000;
-  --accent-hover: #262626;
   --data-met: #15803D;
   --data-partial: #B45309;
   --data-unknown: #A3A3A3;
   --radius: 8px;
-  font-family: Inter, system-ui, sans-serif;
+  font-family: "Geist Variable", sans-serif;
   color: var(--ink);
   background: var(--canvas);
 }
@@ -668,11 +665,10 @@ html[data-theme="dark"] {
   --muted: #A3A3A3;
   --border: #262626;
   --accent: #F5F5F5;
-  --accent-hover: #D4D4D4;
 }
 html, body, #root { min-height: 100%; background: var(--canvas); }
-body { color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 14px; overflow-x: hidden; }
-.mono, time, .candidate-code, .score-number { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+body { color: var(--ink); font-family: "Geist Variable", sans-serif; font-size: 14px; overflow-x: hidden; }
+.mono, time, .candidate-code, .score-number { font-family: "Geist Mono Variable", monospace; font-variant-numeric: tabular-nums; }
 h1 { color: var(--ink); font-size: clamp(32px, 3vw, 40px); font-weight: 700; letter-spacing: -.02em; line-height: 1.12; }
 h2 { color: var(--ink); font-size: 20px; font-weight: 650; line-height: 1.3; }
 h3 { color: var(--ink); font-size: 16px; }
@@ -680,8 +676,8 @@ h3 { color: var(--ink); font-size: 16px; }
 
 button, input, textarea, select { font-family: inherit; }
 button { position: relative; min-height: 42px; border: 1px solid var(--accent); border-radius: var(--radius); color: var(--canvas); background: var(--accent); font-weight: 600; box-shadow: none; }
-button:hover:not(:disabled) { border-color: var(--accent-hover); background: var(--accent-hover); }
-button:not(.secondary):not(.link):not(.breadcrumb-link):not(.req-card):not(.portal-req-card):not(.brand-lockup):not(.portal-brand):not(.icon-button):not(.toast-dismiss):not(.drawer-backdrop):not(.chip)::after { content: "→"; margin-left: 4px; font-family: Inter, sans-serif; }
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); }
+button:not(.secondary):not(.link):not(.breadcrumb-link):not(.req-card):not(.portal-req-card):not(.brand-lockup):not(.portal-brand):not(.icon-button):not(.toast-dismiss):not(.drawer-backdrop):not(.chip)::after { content: "→"; margin-left: 4px; font-family: "Geist Variable", sans-serif; }
 button.secondary { border: 1px solid var(--ink); color: var(--ink); background: var(--canvas); }
 button.secondary:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); background: var(--surface); }
 button.link { min-height: 34px; padding-right: 0; padding-left: 0; border: 0; border-radius: 0; color: var(--ink); background: transparent; text-decoration: underline; text-underline-offset: 3px; font-weight: 500; }
@@ -704,12 +700,12 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .topbar-nav { justify-self: end; }
 .topbar-tools { justify-self: end; }
 .topbar-nav .link { font-size: 12px; letter-spacing: .04em; text-decoration: none; }
-.ai-badge { min-height: 28px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); background: transparent; font: 11px "JetBrains Mono", ui-monospace, monospace; }
+.ai-badge { min-height: 28px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); background: transparent; font: 11px "Geist Mono Variable", monospace; }
 .theme-toggle { width: 36px; min-height: 36px; padding: 0; border: 1px solid var(--border); color: var(--ink); background: transparent; }
 .user-menu { position: relative; }
 .user-menu summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
 .user-menu summary::-webkit-details-marker { display: none; }
-.user-avatar { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--ink); border-radius: 50%; color: var(--ink); font: 11px "JetBrains Mono", ui-monospace, monospace; }
+.user-avatar { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--ink); border-radius: 50%; color: var(--ink); font: 11px "Geist Mono Variable", monospace; }
 .user-menu-copy { display: grid; gap: 1px; }
 .user-menu-copy b { max-width: 120px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .user-menu-copy small { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
@@ -745,7 +741,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .tabs button { min-height: 42px; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); background: transparent; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 .tabs button:hover:not(:disabled) { color: var(--ink); background: transparent; }
 .tabs button.active { border-bottom-color: var(--ink); color: var(--ink); background: transparent; }
-.tab-count { margin-left: 6px; color: var(--muted); font: 10px "JetBrains Mono", ui-monospace, monospace; }
+.tab-count { margin-left: 6px; color: var(--muted); font: 10px "Geist Mono Variable", monospace; }
 .hub-header-stats { display: flex; align-items: center; gap: 16px; }
 .hub-header-stats > span:not(.badge) { display: grid; gap: 1px; min-width: 45px; }
 .hub-header-stats b { color: var(--ink); font-size: 17px; font-weight: 500; }
@@ -776,9 +772,9 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .candidate-head > span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
 .candidate-row { min-height: 58px; border-bottom: 1px solid var(--border); color: var(--ink); background: var(--canvas); }
 .candidate-row:hover { background: var(--surface); }
-.candidate-row.keyboard-active { background: var(--surface); box-shadow: inset 2px 0 #000; }
+.candidate-row.keyboard-active { background: var(--surface); box-shadow: none; }
 .candidate-name b { color: var(--ink); }
-.candidate-name small, .candidate-row > span > small { color: var(--muted); font: 10px "JetBrains Mono", ui-monospace, monospace; }
+.candidate-name small, .candidate-row > span > small { color: var(--muted); font: 10px "Geist Mono Variable", monospace; }
 .cv-count { border-radius: 2px; color: var(--muted); font-size: 10px; }
 .score-cell { gap: 4px; }
 .score-cell > b { color: var(--ink); font-size: 18px; font-weight: 500; }
@@ -808,7 +804,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .upload-row:hover { background: var(--surface); }
 .upload-summary, .upload-next { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
 .summary-chips span { color: var(--muted); }
-.summary-chips b { color: var(--ink); font: 14px "JetBrains Mono", ui-monospace, monospace; }
+.summary-chips b { color: var(--ink); font: 14px "Geist Mono Variable", monospace; }
 .progress-track { border-radius: 0; background: var(--border); }
 .progress-track .progress { background: var(--ink); }
 .dropzone { border-color: var(--border); border-radius: var(--radius); color: var(--ink); background: var(--surface); }
@@ -818,13 +814,13 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .empty-action { margin-top: 4px; }
 .skeleton-list .skeleton { border-color: var(--border); border-radius: var(--radius); background: linear-gradient(90deg,var(--surface),var(--card),var(--surface)); }
 .error { border-color: var(--border); border-radius: var(--radius); color: var(--ink); background: var(--surface); }
-.toast { border: 1px solid #000; border-radius: var(--radius); color: #fff; background: #000; box-shadow: none; }
-.toast .link, .toast-dismiss { color: #fff !important; }
-.toast-dismiss:hover:not(:disabled) { color: #fff; background: #262626; }
+.toast { border: 1px solid var(--border); border-radius: var(--radius); color: var(--ink); background: var(--card); box-shadow: none; }
+.toast .link, .toast-dismiss { color: var(--ink) !important; }
+.toast-dismiss:hover:not(:disabled) { color: var(--ink); background: var(--surface); }
 
 .review-sticky { background: color-mix(in srgb,var(--canvas) 94%,transparent); }
 .review-identity h1 { font-size: 28px; }
-.review-score { font-family: "JetBrains Mono",ui-monospace,monospace; font-variant-numeric: tabular-nums; }
+.review-score { font-family: "Geist Mono Variable",monospace; font-variant-numeric: tabular-nums; }
 .review-grid .card { border-radius: var(--radius); }
 .evidence-group h3 { border-color: var(--border); color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
 .evidence-title { display: grid; justify-items: start; gap: 3px; }
@@ -838,15 +834,15 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .pipeline-column { border-color: var(--border); border-radius: var(--radius); background: var(--surface); }
 .pipeline-card { border-color: var(--border); border-radius: var(--radius); }
 .pipeline-column-head { color: var(--ink); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
-.pipeline-column-head span { border: 1px solid var(--border); border-radius: 50%; color: var(--ink); background: transparent; font-family: "JetBrains Mono",ui-monospace,monospace; }
+.pipeline-column-head span { border: 1px solid var(--border); border-radius: 50%; color: var(--ink); background: transparent; font-family: "Geist Mono Variable",monospace; }
 .stage-age { color: var(--muted); font-size: 11px; }
 
 .portal-shell { background: var(--canvas); }
 .portal-main { max-width: 820px !important; background: var(--canvas); }
 .portal-req-card, .portal-candidate-card, .portal-detail-card { border-color: var(--border); border-radius: var(--radius); color: var(--ink); background: var(--card); }
 .portal-candidate-card h2 { font-size: 16px; font-weight: 600; }
-.portal-count { font: 20px "JetBrains Mono",ui-monospace,monospace; font-variant-numeric: tabular-nums; }
-.portal-count small { font: 10px Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.portal-count { font: 20px "Geist Mono Variable",monospace; font-variant-numeric: tabular-nums; }
+.portal-count small { font: 10px "Geist Variable", sans-serif; letter-spacing: .12em; text-transform: uppercase; }
 .portal-summary { border: 0; border-radius: 0; background: transparent; }
 .portal-evidence-heading { align-items: start; flex-direction: column; gap: 2px; }
 .portal-evidence-heading h3, .portal-evidence-heading b { color: var(--muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
@@ -873,11 +869,11 @@ input::placeholder, textarea::placeholder { color: var(--muted); }
 .portal-detail-main section[id], .portal-detail-main details[id], .review-grid section[id], .review-actions[id], .consent-status[id] { scroll-margin-top: 130px; }
 .portal-detail-card h2, .review-actions h2, .panel-heading h2 { color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
 .access-events article { border-color: var(--border); border-radius: var(--radius); }
-.access-events time, .access-events small { font-family: "JetBrains Mono",ui-monospace,monospace; font-variant-numeric: tabular-nums; }
+.access-events time, .access-events small { font-family: "Geist Mono Variable",monospace; font-variant-numeric: tabular-nums; }
 .insight-metrics > div { border-color: var(--border); border-radius: var(--radius); background: var(--card); }
 .insight-metrics small, .calibration-stats { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
-.insight-metrics b, .overlap-value { color: var(--ink); font: 24px "JetBrains Mono",ui-monospace,monospace; font-variant-numeric: tabular-nums; }
-.overlap-value small { color: var(--muted); font: 10px Inter,sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.insight-metrics b, .overlap-value { color: var(--ink); font: 24px "Geist Mono Variable",monospace; font-variant-numeric: tabular-nums; }
+.overlap-value small { color: var(--muted); font: 10px "Geist Variable", sans-serif; letter-spacing: .12em; text-transform: uppercase; }
 .calibration-list article { border-color: var(--border); }
 
 html[data-theme="dark"] body, html[data-theme="dark"] .shell, html[data-theme="dark"] .portal-shell,
@@ -913,9 +909,9 @@ html[data-theme="dark"] .badge.status-partial { color: #B45309; }
 html[data-theme="dark"] .badge.status-not-met, html[data-theme="dark"] .badge.status-unknown,
 html[data-theme="dark"] .badge.status-unverified { color: var(--data-unknown); }
 html[data-theme="dark"] .filter-chips button.active { color: #0A0A0A; background: #F5F5F5; border-color: #F5F5F5; }
-html[data-theme="dark"] .toast { color: #fff; background: #000; border-color: #262626; }
-html[data-theme="dark"] .toast .link, html[data-theme="dark"] .toast-dismiss { color: #fff !important; }
-html[data-theme="dark"] .toast-dismiss:hover:not(:disabled) { color: #fff; background: #262626; }
+html[data-theme="dark"] .toast { color: var(--ink); background: var(--surface); border-color: var(--border); }
+html[data-theme="dark"] .toast .link, html[data-theme="dark"] .toast-dismiss { color: var(--ink) !important; }
+html[data-theme="dark"] .toast-dismiss:hover:not(:disabled) { color: var(--ink); background: transparent; }
 html[data-theme="dark"] .skeleton-list .skeleton { border-color: var(--border); background: linear-gradient(90deg,#171717,#262626,#171717); }
 
 @media (max-width: 1000px) {
@@ -986,11 +982,95 @@ html[data-theme="dark"] .skeleton-list .skeleton { border-color: var(--border); 
 .label-value-list > div { display: grid; gap: 4px; min-width: 0; }
 .label-value-list dt { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
 .label-value-list dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; margin: 0; color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
-.band-label { color: var(--muted); font: 10px Inter,sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.band-label { color: var(--muted); font: 10px "Geist Variable", sans-serif; letter-spacing: .08em; text-transform: uppercase; }
 .stage-age, .numeric-weight b, .weight-step b, .tab-count, .pipeline-column-head span,
 .portal-section-heading span, .reviewed-section summary span, .evidence-group h3 span,
-.calibration-stats b, .insight-metrics b { font-family: "JetBrains Mono",ui-monospace,monospace; font-variant-numeric: tabular-nums; }
-input[type="number"], input[type="week"], input[type="datetime-local"] { font-family: "JetBrains Mono",ui-monospace,monospace; font-variant-numeric: tabular-nums; }
+.calibration-stats b, .insight-metrics b { font-family: "Geist Mono Variable",monospace; font-variant-numeric: tabular-nums; }
+input[type="number"], input[type="week"], input[type="datetime-local"] { font-family: "Geist Mono Variable",monospace; font-variant-numeric: tabular-nums; }
 .review-identity h1 { font-size: 32px; }
 .req-card:hover, .portal-req-card:hover, .pipeline-card:hover, .portal-candidate-card:hover { box-shadow: none; }
 @media (max-width: 700px) { .label-value-list { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+/* Geist typography and interaction states shared by every screen. */
+:root {
+  --font-sans: "Geist Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+  font-family: var(--font-sans);
+}
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+button, input, textarea, select { font-family: var(--font-sans); }
+h1, h2, h3 { font-weight: 600; letter-spacing: -.02em; }
+h1 { font-size: clamp(32px, 3vw, 40px); }
+.mono, time, .candidate-code, .score-number,
+.badge, .candidate-table .mono, .summary-chips b, .portal-count,
+.insight-metrics b, .overlap-value, input[type="number"], input[type="week"],
+input[type="datetime-local"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.badge { font-size: 11px; font-weight: 500; letter-spacing: .12em; }
+.score-track > div, .progress-track .progress { background: var(--muted); }
+.candidate-head > span, .upload-head, .section-title h3, .panel-heading h2,
+.portal-detail-card h2, .calibration-list h3 { font-size: 11px; font-weight: 500; }
+
+/* Primary controls keep their fill; other controls use outline or text states. */
+button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent); }
+button.secondary:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); background: var(--surface); }
+button.link:hover:not(:disabled), .brand-lockup:hover:not(:disabled),
+.theme-toggle:hover:not(:disabled), .toast-dismiss:hover:not(:disabled),
+.drawer-backdrop:hover:not(:disabled) { color: var(--ink); background: transparent; }
+.icon-button:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); background: var(--surface); }
+.chips .chip, .portal-skills span, .criterion-chip, .badge { box-shadow: none; }
+.chips .chip:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); background: var(--surface); }
+.tabs button:hover:not(:disabled), .tabs button.active { background: transparent; }
+.filter-chips button.active { border-color: var(--accent); color: var(--canvas); background: var(--accent); }
+
+/* Cards never invert; hover changes only the outline. */
+.card, .req-card, .portal-req-card, .portal-candidate-card, .portal-detail-card,
+.calibration-card, .insight-metrics > div, .pipeline-card, .modal-card, .drawer,
+.login section, .user-menu-popover, .bottom-sheet {
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: none;
+}
+button.req-card, button.portal-req-card { color: var(--ink); background: var(--card); }
+button.req-card:hover:not(:disabled), button.portal-req-card:hover:not(:disabled),
+button.req-card:active:not(:disabled), button.portal-req-card:active:not(:disabled),
+.pipeline-card:hover, .portal-candidate-card:hover, .portal-detail-card:hover,
+.calibration-card:hover, .insight-metrics > div:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: none;
+}
+.candidate-row:hover, .candidate-row.keyboard-active, .upload-row:hover { background: var(--surface); box-shadow: none; }
+.toast { border-color: var(--border); color: var(--ink); background: var(--card); box-shadow: none; }
+.toast .link, .toast-dismiss { color: var(--ink) !important; }
+.toast-dismiss:hover:not(:disabled) { background: var(--surface); }
+
+html[data-theme="dark"] button.secondary { color: var(--ink); background: var(--canvas); }
+html[data-theme="dark"] button.secondary:hover:not(:disabled) { color: var(--ink); background: var(--surface); }
+html[data-theme="dark"] .filter-chips button.active { border-color: var(--accent); color: var(--canvas); background: var(--accent); }
+html[data-theme="dark"] .card, html[data-theme="dark"] .req-card,
+html[data-theme="dark"] .portal-req-card, html[data-theme="dark"] .portal-candidate-card,
+html[data-theme="dark"] .portal-detail-card, html[data-theme="dark"] .calibration-card,
+html[data-theme="dark"] .insight-metrics > div, html[data-theme="dark"] .pipeline-card,
+html[data-theme="dark"] .modal-card, html[data-theme="dark"] .drawer,
+html[data-theme="dark"] .login section, html[data-theme="dark"] .user-menu-popover,
+html[data-theme="dark"] .bottom-sheet { border-color: var(--border); color: var(--ink); background: var(--card); }
+html[data-theme="dark"] button.req-card, html[data-theme="dark"] button.portal-req-card,
+html[data-theme="dark"] button.req-card:hover:not(:disabled),
+html[data-theme="dark"] button.portal-req-card:hover:not(:disabled),
+html[data-theme="dark"] button.req-card:active:not(:disabled),
+html[data-theme="dark"] button.portal-req-card:active:not(:disabled),
+html[data-theme="dark"] .pipeline-card:hover, html[data-theme="dark"] .portal-candidate-card:hover,
+html[data-theme="dark"] .portal-detail-card:hover, html[data-theme="dark"] .calibration-card:hover,
+html[data-theme="dark"] .insight-metrics > div:hover { border-color: var(--ink); color: var(--ink); background: var(--card); }
+html[data-theme="dark"] .toast { border-color: var(--border); color: var(--ink); background: var(--surface); }
+html[data-theme="dark"] .toast .link, html[data-theme="dark"] .toast-dismiss { color: var(--ink) !important; }
+html[data-theme="dark"] .toast-dismiss:hover:not(:disabled) { color: var(--ink); background: transparent; }

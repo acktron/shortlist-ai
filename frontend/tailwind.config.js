@@ -1,1 +1,1 @@
-export default {content:['./index.html','./src/**/*.{ts,tsx}'],theme:{extend:{fontFamily:{sans:['Inter','sans-serif']},borderRadius:{xl:'12px'},colors:{accent:'#3B3BD4',zinc:{950:'#09090b'}}}},plugins:[]};
+export default {content:['./index.html','./src/**/*.{ts,tsx}'],theme:{extend:{fontFamily:{sans:['Geist Variable','sans-serif'],mono:['Geist Mono Variable','monospace']},borderRadius:{xl:'12px'},colors:{accent:'#000000',zinc:{950:'#09090b'}}}},plugins:[]};
