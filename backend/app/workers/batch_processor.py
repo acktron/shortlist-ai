@@ -17,9 +17,9 @@ async def process_file(file_id:uuid.UUID)->None:
         file=db.get(CvFile,file_id);blob=db.query(CvBlob).filter_by(cv_file_id=file_id).first()
         if not file or not blob:return
         file.status='parsing';file.sha256=hashlib.sha256(blob.data).hexdigest();db.commit()
+        parsed=parse_file(Path(file.filename),blob.data);file.parse_method=parsed.parse_method
         duplicate=find_duplicate(db,file.sha256,None,'',file.id)
         if duplicate.kind=='exact':file.candidate_id=duplicate.existing_candidate.id if duplicate.existing_candidate else None;file.status='duplicate';db.commit();return
-        parsed=parse_file(Path(file.filename),blob.data);file.parse_method=parsed.parse_method
         if parsed.parse_method=='ocr_ai':
             profile=await get_provider().extract_profile(await get_provider().transcribe_scan(blob.data))
         else: profile=await get_provider().extract_profile(parsed.text)
