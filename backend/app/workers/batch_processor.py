@@ -3,10 +3,12 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from ..ai.provider import get_provider
 from ..db import SessionLocal
-from ..models import Application,Candidate,CvBlob,CvFile,Requisition,UploadBatch
+from ..models import Application,Candidate,CvBlob,CvFile,Requisition,UploadBatch,Scorecard,Score
 from ..services.dedupe import find_duplicate
 from ..services.parsing import ParseError,parse_file
 from ..services.redaction import redact
+from ..services.evidence import has_prompt_injection,verify_evidence
+from ..services.scoring import compute_score
 from ..config import settings
 log=logging.getLogger(__name__)
 queue:asyncio.Queue[uuid.UUID]=asyncio.Queue();worker_tasks:list[asyncio.Task]=[]
@@ -31,7 +33,21 @@ async def process_file(file_id:uuid.UUID)->None:
         batch=db.get(UploadBatch,file.batch_id)
         if batch and batch.requisition_id and not db.query(Application).filter_by(requisition_id=batch.requisition_id,candidate_id=candidate.id).first():
             db.add(Application(requisition_id=batch.requisition_id,candidate_id=candidate.id,cv_file_id=file.id,stage='sourced'))
-        # PHASE 4: scoring goes here
+        app=db.query(Application).filter_by(requisition_id=batch.requisition_id,candidate_id=candidate.id).first() if batch else None
+        scorecard=db.query(Scorecard).filter_by(requisition_id=batch.requisition_id,is_active=True).first() if batch else None
+        if app and scorecard:
+            scoring_input=f'<cv>{redacted}</cv>'
+            model_result=await get_provider().score_cv(redacted,{'criteria':scorecard.criteria})
+            verdicts=[]
+            for verdict in model_result.criteria:
+                item=next((c for c in scorecard.criteria if c.get('id')==verdict.criterion_id),{})
+                evidence=verify_evidence(verdict.evidence,parsed.raw_text if hasattr(parsed,'raw_text') else parsed.text)
+                current=verdict.verdict
+                if current in ('met','partial') and not any(x['verified'] for x in evidence): current='unverified'
+                verdicts.append({'criterion_id':verdict.criterion_id,'kind':item.get('kind'),'label':item.get('label',verdict.criterion_id),'weight':item.get('weight',1),'verdict':current,'evidence':evidence,'reason':verdict.reason})
+            result=compute_score(verdicts)
+            if has_prompt_injection(parsed.text): result['needs_review']=True;result['confidence']='low';result['review_reasons'].append('CV contains instructions aimed at the AI')
+            db.add(Score(application_id=app.id,scorecard_id=scorecard.id,total=result['total'],coverage=result['coverage'],band=result['band'],confidence=result['confidence'],needs_review=result['needs_review'],review_reasons=result['review_reasons'],criteria=result['criteria'],scoring_input=scoring_input,model=get_provider().model,prompt_version='phase3-v1'))
         db.commit()
     except ParseError as exc:
         db.rollback();file=db.get(CvFile,file_id)

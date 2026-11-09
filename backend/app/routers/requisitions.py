@@ -3,9 +3,10 @@ from fastapi import APIRouter,Depends,HTTPException
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user,require_role
-from ..models import User,Role,Requisition,Scorecard,Client
+from ..models import User,Role,Requisition,Scorecard,Client,Application,CvFile
 from ..schemas.requisitions import *
 from ..ai.provider import get_provider
+from ..workers.batch_processor import process_file
 router=APIRouter(prefix='/requisitions',tags=['requisitions'])
 @router.get('',response_model=list[RequisitionOut])
 def listing(db:Session=Depends(get_db),user:User=Depends(get_current_user)):
@@ -39,3 +40,10 @@ def save_scorecard(rid:UUID,data:ScorecardSave,db:Session=Depends(get_db),user:U
     version=(current.version+1 if current else 1)
     if current:current.is_active=False
     row=Scorecard(requisition_id=rid,version=version,is_active=True,created_by=user.id,**data.model_dump());db.add(row);db.commit();db.refresh(row);return row
+@router.post('/{rid}/rescore')
+async def rescore(rid:UUID,db:Session=Depends(get_db),user:User=Depends(require_role(Role.recruiter,Role.delivery_head))):
+    if not db.get(Requisition,rid): raise HTTPException(404,'Requisition not found')
+    files=[row.cv_file_id for row in db.query(Application).filter(Application.requisition_id==rid).all()]
+    for file_id in files:
+        if file_id: await process_file(file_id)
+    return {'reprocessed':len(files)}
