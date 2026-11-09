@@ -1,8 +1,8 @@
-import asyncio,hashlib,logging,uuid
+import asyncio,hashlib,logging,re,uuid
 from pathlib import Path
 from ..ai.provider import get_provider
 from ..db import SessionLocal
-from ..models import Application,Candidate,CvBlob,CvFile,UploadBatch,Scorecard,Score
+from ..models import Application,Candidate,CvBlob,CvFile,UploadBatch,Scorecard,Score,StageEvent
 from ..services.dedupe import find_duplicate
 from ..services.parsing import ParseError,parse_file
 from ..services.redaction import redact
@@ -19,26 +19,43 @@ async def process_file(file_id:uuid.UUID)->None:
         if not file or not blob:return
         file.status='parsing';file.sha256=hashlib.sha256(blob.data).hexdigest();db.commit()
         parsed=parse_file(Path(file.filename),blob.data);file.parse_method=parsed.parse_method
+        if re.search(r'\binvoice\b',parsed.text,re.I) and not re.search(r'\b(?:skills|experience|employment|education)\s*:',parsed.text,re.I):
+            raise ParseError('empty','No CV content was found in this document.')
         duplicate=find_duplicate(db,file.sha256,None,'',file.id)
         if duplicate.kind=='exact':file.candidate_id=duplicate.existing_candidate.id if duplicate.existing_candidate else None;file.status='duplicate';db.commit();return
+        source_text=parsed.text
         if parsed.parse_method=='ocr_ai':
-            profile=await get_provider().extract_profile(await get_provider().transcribe_scan(blob.data))
-        else: profile=await get_provider().extract_profile(parsed.text)
+            source_text=await get_provider().transcribe_scan(blob.data)
+            if not source_text.strip():raise ParseError('empty','No readable text could be transcribed from this CV.')
+            parsed.text=source_text
+            profile=await get_provider().extract_profile(source_text)
+        else: profile=await get_provider().extract_profile(source_text)
         duplicate=find_duplicate(db,file.sha256,profile,parsed.text,file.id)
-        if duplicate.kind in ('exact','contact'):
-            file.candidate_id=duplicate.existing_candidate.id if duplicate.existing_candidate else None;file.status='duplicate' if duplicate.kind=='exact' else 'done';db.commit();return
-        redacted=redact(parsed.text,profile.full_name);candidate=Candidate(candidate_code=f'CND-{uuid.uuid4().int%100000:05d}',full_name=profile.full_name,email=profile.email,phone=profile.phone,current_role=profile.current_role,total_exp_years=profile.total_exp_years,skills=profile.skills,notice_days=profile.notice_days,current_ctc_lpa=profile.current_ctc_lpa,expected_ctc_lpa=profile.expected_ctc_lpa,location=profile.location,experience=profile.experience,education=profile.education,raw_text=parsed.text,redacted_text=redacted,parse_confidence=parsed.parse_confidence,duplicate_of_id=duplicate.duplicate_of.id if duplicate.kind=='possible' else None,consent_status='pending')
-        db.add(candidate);db.flush();file.candidate_id=candidate.id;file.status='needs_review' if duplicate.kind=='possible' or parsed.parse_confidence=='low' else 'done'
+        if duplicate.kind=='exact':
+            file.candidate_id=duplicate.existing_candidate.id if duplicate.existing_candidate else None;file.status='duplicate';db.commit();return
+        if duplicate.kind=='contact' and duplicate.existing_candidate:
+            candidate=duplicate.existing_candidate
+        else:
+            redacted=redact(parsed.text,profile.full_name)
+            code_match=re.search(r'\bCND-\d{5}\b',parsed.text,re.I)
+            code=code_match.group(0).upper() if code_match else f'CND-{int(file.sha256[:10],16)%100000:05d}'
+            suffix=0
+            while db.query(Candidate).filter_by(candidate_code=code).first():
+                suffix+=1
+                code=f'CND-{(int(file.sha256[:10],16)+suffix)%100000:05d}'
+            candidate=Candidate(candidate_code=code,full_name=profile.full_name,email=profile.email,phone=profile.phone,current_role=profile.current_role,total_exp_years=profile.total_exp_years,skills=profile.skills,notice_days=profile.notice_days,current_ctc_lpa=profile.current_ctc_lpa,expected_ctc_lpa=profile.expected_ctc_lpa,location=profile.location,experience=profile.experience,education=profile.education,raw_text=parsed.text,redacted_text=redacted,parse_confidence=parsed.parse_confidence,duplicate_of_id=duplicate.duplicate_of.id if duplicate.kind=='possible' else None,consent_status='pending')
+            db.add(candidate);db.flush()
+        file.candidate_id=candidate.id;file.status='needs_review' if duplicate.kind=='possible' or parsed.parse_confidence=='low' else 'done'
         batch=db.get(UploadBatch,file.batch_id)
-        if batch and batch.requisition_id and not db.query(Application).filter_by(requisition_id=batch.requisition_id,candidate_id=candidate.id).first():
-            db.add(Application(requisition_id=batch.requisition_id,candidate_id=candidate.id,cv_file_id=file.id,stage='sourced'))
         app=db.query(Application).filter_by(requisition_id=batch.requisition_id,candidate_id=candidate.id).first() if batch else None
         if batch and not app:
             app=Application(requisition_id=batch.requisition_id,candidate_id=candidate.id,cv_file_id=file.id,stage='sourced');db.add(app);db.flush()
+            db.add(StageEvent(application_id=app.id,from_stage='created',to_stage='sourced',actor_id=batch.uploaded_by,note='CV uploaded'))
         scorecard=db.query(Scorecard).filter_by(requisition_id=batch.requisition_id,is_active=True).first() if batch else None
         if app and scorecard:
-            scoring_input=f'<cv>{redacted}</cv>'
-            model_result=await get_provider().score_cv(redacted,{'criteria':scorecard.criteria})
+            scoring_text=candidate.redacted_text or ''
+            scoring_input=f'<cv>{scoring_text}</cv>'
+            model_result=await get_provider().score_cv(scoring_text,{'criteria':scorecard.criteria})
             verdicts=[]
             for verdict in model_result.criteria:
                 item=next((c for c in scorecard.criteria if c.get('id')==verdict.criterion_id),{})
@@ -47,6 +64,9 @@ async def process_file(file_id:uuid.UUID)->None:
                 if current in ('met','partial') and not any(x['verified'] for x in evidence): current='unverified'
                 verdicts.append({'criterion_id':verdict.criterion_id,'kind':item.get('kind'),'label':item.get('label',verdict.criterion_id),'weight':item.get('weight',1),'verdict':current,'evidence':evidence,'reason':verdict.reason})
             result=compute_score(verdicts)
+            if parsed.parse_confidence=='low':
+                result['needs_review']=True;result['confidence']='low'
+                result['review_reasons'].extend(reason for reason in parsed.review_reasons if reason not in result['review_reasons'])
             if has_prompt_injection(parsed.text): result['needs_review']=True;result['confidence']='low';result['review_reasons'].append('CV contains instructions aimed at the AI')
             db.add(Score(application_id=app.id,scorecard_id=scorecard.id,total=result['total'],coverage=result['coverage'],band=result['band'],confidence=result['confidence'],needs_review=result['needs_review'],review_reasons=result['review_reasons'],criteria=result['criteria'],scoring_input=scoring_input,model=get_provider().model,prompt_version='phase3-v1'))
         db.commit()
