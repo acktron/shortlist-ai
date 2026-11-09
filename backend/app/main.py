@@ -7,7 +7,12 @@ from .config import settings
 from .routers.auth import router as auth_router
 from .routers.requisitions import router as requisitions_router
 from .ai.provider import provider_meta
+from .workers.batch_processor import start_workers,stop_workers
 app=FastAPI(title="ShortlistAI API")
+@app.on_event('startup')
+async def start_batch_workers(): await start_workers()
+@app.on_event('shutdown')
+async def stop_batch_workers(): await stop_workers()
 @app.exception_handler(HTTPException)
 async def http_error(request:Request,exc:HTTPException):
     detail=exc.detail if isinstance(exc.detail,dict) else {'code':'http_error','message':str(exc.detail)}
