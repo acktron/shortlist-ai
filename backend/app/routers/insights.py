@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import require_role
 from ..models import Application, Candidate, Client, Requisition, Role, Score, Scorecard, User
+from ..services.scoring import build_score_summary
 
 router = APIRouter(tags=["insights"])
 ACCEPTED_STAGES = {"shortlisted", "interview", "offered", "joined"}
@@ -45,6 +46,7 @@ def _rank_item(candidate: Candidate, application: Application, score: Score | No
         "score": score.total if score else None,
         "coverage": float(score.coverage) if score and score.coverage is not None else 0,
         "band": score.band if score else None,
+        "score_summary": build_score_summary(score.total if score else None, score.band if score else None, criteria),
         "needs_review": bool(score and score.needs_review),
         "stage": application.stage,
         "must_have_met": sum(item.get("kind") == "must_skill" and item.get("verdict") == "met" for item in criteria),

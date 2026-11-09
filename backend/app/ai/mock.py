@@ -8,6 +8,23 @@ from .schemas import CriterionVerdict, Profile, ScoreResult, ScorecardDraft, Ski
 class MockProvider:
     """Deterministic local provider used for tests and demo data."""
 
+    @staticmethod
+    def _evidence_line(text: str, term: str) -> str:
+        """Return the CV line containing a matched skill, capped at 200 chars."""
+        for source_line in text.splitlines():
+            line = source_line.strip()
+            position = line.lower().find(term.lower())
+            if position < 0:
+                continue
+            if len(line) <= 200:
+                return line
+            sentence = next((part.strip() for part in re.split(r"(?<=[.!?])\s+", line) if term.lower() in part.lower()), "")
+            if sentence and len(sentence) <= 200:
+                return sentence
+            start = max(0, min(position - 80, len(line) - 200))
+            return line[start:start + 200].strip()
+        return ""
+
     model = "mock"
 
     async def extract_scorecard(self, jd: str) -> ScorecardDraft:
@@ -100,11 +117,12 @@ class MockProvider:
             aliases = criterion.get("params", {}).get("aliases", [])
             terms = [label, *aliases]
             found = next((term for term in terms if term and term.lower() in low), None)
+            quote = self._evidence_line(text, found) if found else ""
             results.append(
                 CriterionVerdict(
                     criterion_id=criterion.get("id", ""),
                     verdict="met" if found else "not_met",
-                    evidence=[{"quote": found}] if found else [],
+                    evidence=[{"quote": quote}] if quote else [],
                     reason="Keyword evidence found." if found else "No evidence found.",
                 )
             )

@@ -8,7 +8,7 @@ from ..services.dedupe import find_duplicate
 from ..services.parsing import ParseError,parse_file
 from ..services.redaction import redact
 from ..services.evidence import has_prompt_injection,verify_evidence
-from ..services.scoring import compute_score
+from ..services.scoring import compute_score,experience_verdict
 from ..config import settings
 log=logging.getLogger(__name__)
 queue:asyncio.Queue[uuid.UUID]=asyncio.Queue();worker_tasks:list[asyncio.Task]=[]
@@ -24,9 +24,10 @@ def _numeric_verdict(item:dict[str,Any],candidate:Candidate,requisition:Any,raw_
         low=params.get('min_years');high=params.get('max_years')
         if value is not None and low is not None and high is not None:
             years=float(value)
-            if float(low)<=years<=float(high):verdict='met';reason=f'{years:g} years is within the requested range.'
-            elif float(low)-1<=years<float(low) or years>float(high):verdict='partial';reason='Experience is close to or above the requested range.'
-            else:verdict='not_met';reason='Experience is below the requested range.'
+            verdict=experience_verdict(years,float(low),float(high))
+            if verdict=='met':reason=f'{years:g} years is within the requested range.'
+            elif verdict=='partial':reason='Experience is close to or above the requested range.'
+            else:reason='Experience is below the requested range.'
     elif kind=='notice':
         value=candidate.notice_days;quote=_source_line(raw_text,r'notice(?:\s+period)?\s*:');maximum=params.get('max_days')
         if value is not None and maximum is not None:
@@ -111,11 +112,11 @@ async def process_file(file_id:uuid.UUID)->None:
                         current='unknown';evidence=[];reason='The AI did not return a verdict for this criterion.';missing_criteria=True
                     else:
                         current=model_verdict.verdict;evidence=model_verdict.evidence;reason=model_verdict.reason
-                    verdicts.append(_verify_scoring_evidence({'criterion_id':item.get('id'),'kind':item.get('kind'),'label':item.get('label',''),'weight':item.get('weight',1),'verdict':current,'evidence':evidence,'reason':reason},parsed.text))
+                    verdicts.append(_verify_scoring_evidence({'criterion_id':item.get('id'),'kind':item.get('kind'),'label':item.get('label',''),'weight':item.get('weight',1),'verdict':current,'evidence':evidence,'reason':reason},scoring_text))
                 else:
                     verdict=_numeric_verdict(item,candidate,db.get(Requisition,batch.requisition_id),parsed.text)
                     if verdict is not None:
-                        verdicts.append(_verify_scoring_evidence(verdict,parsed.text))
+                        verdicts.append(_verify_scoring_evidence(verdict,scoring_text))
             result=compute_score(verdicts)
             if any(item.get('verdict')=='unverified' for item in verdicts):
                 result['review_reasons'].append("AI evidence couldn't be found in the CV")

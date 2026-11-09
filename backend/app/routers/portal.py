@@ -8,7 +8,9 @@ from ..db import get_db
 from ..deps import require_role
 from ..models import Application, AccessLog, Candidate, ClientFeedback, Requisition, Role, Score, Scorecard, User
 from ..schemas.portal import PortalFeedback
+from ..services.evidence import normalize_criteria_evidence
 from ..services.pipeline import CLIENT_VISIBLE_STAGES, transition_application
+from ..services.scoring import build_score_summary
 
 router = APIRouter(prefix="/portal", tags=["portal"])
 
@@ -40,7 +42,7 @@ def _score(db: Session, application: Application, requisition_id: UUID) -> Score
 
 def _serialize(db: Session, application: Application, requisition: Requisition, candidate: Candidate, include_cv: bool) -> dict:
     score = _score(db, application, requisition.id)
-    criteria = score.criteria if score and isinstance(score.criteria, list) else []
+    criteria = normalize_criteria_evidence(score.criteria, candidate.redacted_text or "") if score and isinstance(score.criteria, list) else []
     evidence = []
     for item in criteria:
         if item.get("verdict") not in ("met", "partial"):
@@ -48,10 +50,6 @@ def _serialize(db: Session, application: Application, requisition: Requisition, 
         for quote in item.get("evidence", []):
             if quote.get("verified") and quote.get("quote"):
                 evidence.append({"label": item.get("label", "Evidence"), "verdict": item.get("verdict"), "quote": quote["quote"]})
-    summary = "AI scorecard evidence is not available yet."
-    if score:
-        matched = sum(item.get("verdict") == "met" for item in criteria)
-        summary = f"{score.total}% match · evidence found for {matched} of {len(criteria)} criteria."
     result = {
         "application_id": str(application.id),
         "candidate_code": candidate.candidate_code,
@@ -61,7 +59,7 @@ def _serialize(db: Session, application: Application, requisition: Requisition, 
         "skills": candidate.skills or [],
         "notice_days": candidate.notice_days,
         "expected_ctc_lpa": float(candidate.expected_ctc_lpa) if candidate.expected_ctc_lpa is not None else None,
-        "summary": summary,
+        "score_summary": build_score_summary(score.total if score else None, score.band if score else None, criteria),
         "top_evidence": evidence[:4],
         "recruiter_note": application.recruiter_note,
         "status": application.stage,

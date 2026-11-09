@@ -65,6 +65,8 @@ def test_portal_masks_contact_fields_and_logs_profile_views(client):
     data = response.json()
     assert data["name"] == "Maya R."
     assert data["redacted_cv_text"] == candidate.redacted_text
+    assert data["score_summary"] == {"score": 80, "band": "strong", "met": 1, "partial": 0, "not_met": 0, "not_stated": 0}
+    assert data["top_evidence"][0]["verdict"] == "met"
     serialized = str(data).lower()
     assert "private@example.demo" not in serialized
     assert candidate.email.lower() not in serialized

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { api, login, logout } from './api/client';
-import { EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge } from './components/shared';
+import { EmptyState, ErrorState, PageHeader, ScoreSummary, Skeleton, StatusBadge, type ScoreSummaryData } from './components/shared';
 import { UploadScreen } from './components/upload';
 import './styles.css';
 
@@ -222,7 +222,7 @@ function Scorecard({ req, counts }: { req: Req; counts: Counts }) {
   </main></>;
 }
 
-type CandidateRow = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; skills: string[]; score: number | null; band: string | null; needs_review: boolean; review_reasons: string[]; stage: string; criteria: any[]; duplicate_of_id?: string | null };
+type CandidateRow = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; skills: string[]; score: number | null; band: string | null; score_summary: ScoreSummaryData | null; needs_review: boolean; review_reasons: string[]; stage: string; criteria: any[]; duplicate_of_id?: string | null };
 function CandidateList({ id }: { id: string }) {
   const [items, setItems] = useState<CandidateRow[]>([]); const [q, setQ] = useState(''); const [band, setBand] = useState(''); const [needsReview, setNeedsReview] = useState(''); const [stage, setStage] = useState('');
   const [loading, setLoading] = useState(true); const [error, setError] = useState('');
@@ -248,7 +248,7 @@ function CandidateList({ id }: { id: string }) {
       {items.map(item => <div className="candidate-row" role="row" key={item.id}>
         <span><b>{item.candidate_code}</b><br />{item.name}{item.needs_review && <small className="review-tag">Needs review</small>}{item.duplicate_of_id && <small className="review-tag">Possible duplicate</small>}</span>
         <span>{item.current_role || '—'}<small>{item.experience ?? '—'} years</small></span>
-        <span className="score-cell"><b>{item.score ?? '—'}</b>{item.score !== null && <div className="score-track"><div style={{ width: `${item.score}%` }} /></div>}{item.band && <StatusBadge status={item.band} />}</span>
+        <span className="score-cell"><ScoreSummary summary={item.score_summary} />{item.score !== null && <div className="score-track"><div style={{ width: `${item.score}%` }} /></div>}</span>
         <span className="criteria-chips">{item.criteria?.map(c => <StatusBadge key={c.criterion_id} status={c.verdict} />)}</span>
         <span><StatusBadge status={item.stage} /></span><span><button type="button" className="secondary" onClick={() => open(item.id)}>Review</button></span>
       </div>)}
@@ -256,7 +256,7 @@ function CandidateList({ id }: { id: string }) {
   </main>;
 }
 
-type PipelineCard = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; score: number | null; band: string | null; needs_review: boolean; allowed_transitions: string[]; proposed_slots: string[] };
+type PipelineCard = { id: string; candidate_id: string; candidate_code: string; name: string; current_role: string; experience: number | null; score: number | null; band: string | null; score_summary: ScoreSummaryData | null; needs_review: boolean; allowed_transitions: string[]; proposed_slots: string[] };
 type PipelineColumn = { stage: string; count: number; applications: PipelineCard[] };
 function PipelineBoard({ requisitionId }: { requisitionId: string }) {
   const [columns, setColumns] = useState<PipelineColumn[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
@@ -286,7 +286,7 @@ function PipelineBoard({ requisitionId }: { requisitionId: string }) {
         {column.applications.length === 0 ? <p className="pipeline-empty">No candidates</p> : column.applications.map(card => <article className="pipeline-card" key={card.id}>
           <div className="pipeline-card-top"><b>{card.candidate_code}</b>{card.needs_review && <StatusBadge status="needs_review" />}</div>
           <strong>{card.name}</strong><span className="muted">{card.current_role || 'Candidate'} · {card.experience ?? '—'} years</span>
-          <div className="pipeline-card-score">{card.score !== null ? <><b>{card.score}</b><StatusBadge status={card.band || 'low'} /></> : <span className="muted">Not scored</span>}</div>
+          <div className="pipeline-card-score">{card.score !== null ? <ScoreSummary summary={card.score_summary} /> : <span className="muted">Not scored</span>}</div>
           <button type="button" className="secondary review-card" onClick={() => window.location.assign(`/recruiter/applications/${card.id}`)}>Review candidate</button>
           {card.allowed_transitions.length > 0 && <label className="stage-menu">Move stage<select value="" disabled={busyId === card.id} onChange={event => selectStage(card, event.target.value)}><option value="">Choose stage</option>{card.allowed_transitions.map(stage => <option key={stage} value={stage}>{stage.replaceAll('_', ' ')}</option>)}</select></label>}
           {pending[card.id]?.stage === 'interview' && <div className="slot-confirm"><label>Confirm a proposed time<select value={pending[card.id].slot} onChange={event => setPending(current => ({ ...current, [card.id]: { stage: 'interview', slot: event.target.value } }))}><option value="">Choose a slot</option>{card.proposed_slots.map(slot => <option key={slot} value={slot}>{new Date(slot).toLocaleString()}</option>)}</select></label><div><button type="button" disabled={busyId === card.id || !pending[card.id].slot} onClick={() => void move(card.id, 'interview', { confirmed_slot: pending[card.id].slot })}>Confirm</button><button type="button" className="link" onClick={() => setPending(current => { const next = { ...current }; delete next[card.id]; return next; })}>Cancel</button></div></div>}
@@ -298,7 +298,7 @@ function PipelineBoard({ requisitionId }: { requisitionId: string }) {
 }
 
 type PortalRequisition = { id: string; title: string; location: string; candidate_count: number };
-type PortalCandidate = { application_id: string; candidate_code: string; name: string; current_role: string; experience_years: number | null; skills: string[]; notice_days: number | null; expected_ctc_lpa: number | null; summary: string; top_evidence: { label: string; verdict: string; quote: string }[]; recruiter_note: string | null; status: string; band: string | null; redacted_cv_text?: string };
+type PortalCandidate = { application_id: string; candidate_code: string; name: string; current_role: string; experience_years: number | null; skills: string[]; notice_days: number | null; expected_ctc_lpa: number | null; score_summary: ScoreSummaryData | null; top_evidence: { label: string; verdict: string; quote: string }[]; recruiter_note: string | null; status: string; band: string | null; redacted_cv_text?: string };
 
 function PortalShell({ children }: { children: React.ReactNode }) {
   return <div className="portal-shell"><header><button type="button" className="portal-brand" onClick={() => window.location.assign('/portal')}>Shortlist<span>AI</span></button><button type="button" className="link" onClick={() => { logout(); window.location.assign('/login'); }}>Sign out</button></header>{children}</div>;
@@ -318,7 +318,7 @@ function PortalCandidates({ requisitionId }: { requisitionId: string }) {
   const load = () => { setLoading(true); setError(''); void api<PortalCandidate[]>(`/portal/requisitions/${requisitionId}/candidates`).then(setRows).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load candidates')).finally(() => setLoading(false)); };
   useEffect(load, [requisitionId]);
   return <PortalShell><main className="portal-main"><button type="button" className="link portal-back" onClick={() => window.location.assign('/portal')}>← Roles</button><PageHeader title="Candidates" description="Names and contact details are masked in this portal." />
-    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No submitted candidates yet" action={<button type="button" onClick={() => window.location.assign('/portal')}>Back to roles</button>} /> : <div className="portal-cards">{rows.map(candidate => <article className="portal-candidate-card" key={candidate.application_id}><div className="portal-candidate-heading"><div><b>{candidate.name}</b><small>{candidate.candidate_code}</small></div><StatusBadge status={candidate.status} /></div><h2>{candidate.current_role || 'Candidate'}</h2><p>{candidate.experience_years ?? '—'} years · {candidate.skills.slice(0, 5).join(' · ')}</p><p className="portal-summary">{candidate.summary}</p>{candidate.top_evidence.slice(0, 2).map((item, index) => <blockquote key={`${item.label}-${index}`}><b>{item.label}</b>{item.quote}</blockquote>)}<button type="button" className="secondary portal-review" onClick={() => window.location.assign(`/portal/applications/${candidate.application_id}`)}>Review candidate</button></article>)}</div>}
+    {loading ? <Skeleton rows={4} /> : error ? <ErrorState message={error} retry={load} /> : rows.length === 0 ? <EmptyState title="No submitted candidates yet" action={<button type="button" onClick={() => window.location.assign('/portal')}>Back to roles</button>} /> : <div className="portal-cards">{rows.map(candidate => <article className="portal-candidate-card" key={candidate.application_id}><div className="portal-candidate-heading"><div><b>{candidate.name}</b><small>{candidate.candidate_code}</small></div><StatusBadge status={candidate.status} /></div><h2>{candidate.current_role || 'Candidate'}</h2><p>{candidate.experience_years ?? '—'} years · {candidate.skills.slice(0, 5).join(' · ')}</p><div className="portal-summary"><ScoreSummary summary={candidate.score_summary} /></div>{candidate.top_evidence.slice(0, 2).map((item, index) => <div className="portal-list-evidence" key={`${item.label}-${index}`}><div className="portal-evidence-heading"><b>{item.label}</b><StatusBadge status={item.verdict} /></div><blockquote>{item.quote}</blockquote></div>)}<button type="button" className="secondary portal-review" onClick={() => window.location.assign(`/portal/applications/${candidate.application_id}`)}>Review candidate</button></article>)}</div>}
   </main></PortalShell>;
 }
 
@@ -350,8 +350,8 @@ function PortalDetail({ applicationId }: { applicationId: string }) {
   return <PortalShell><main className="portal-main portal-detail-main"><button type="button" className="link portal-back" onClick={() => window.history.back()}>← Candidates</button>
     <div className="portal-detail-heading"><div><h1>{data.name}</h1><p>{data.candidate_code} · {data.current_role || 'Candidate'}</p></div><StatusBadge status={feedbackStatus || data.status} /></div>
     {toast && <div className="portal-toast" role="status">{toast}</div>}{error && <ErrorState message={error} retry={retryAction} />}
-    <section className="portal-detail-card"><h2>Summary</h2><p>{data.summary}</p><div className="portal-facts"><span><small>Experience</small><b>{data.experience_years ?? '—'} years</b></span><span><small>Notice period</small><b>{data.notice_days == null ? 'Not provided' : `${data.notice_days} days`}</b></span><span><small>Expected CTC</small><b>{data.expected_ctc_lpa == null ? 'Not provided' : `${data.expected_ctc_lpa} LPA`}</b></span></div><div className="portal-skills">{data.skills.map(skill => <span key={skill}>{skill}</span>)}</div></section>
-    <section className="portal-detail-card"><h2>Top evidence</h2>{data.top_evidence.length ? data.top_evidence.map((item, index) => <blockquote className="portal-evidence" key={`${item.label}-${index}`}><StatusBadge status={item.verdict} /><b>{item.label}</b><span>{item.quote}</span></blockquote>) : <p className="muted">No verified evidence quotes are available.</p>}</section>
+    <section className="portal-detail-card"><h2>Summary</h2><ScoreSummary summary={data.score_summary} /><div className="portal-facts"><span><small>Experience</small><b>{data.experience_years ?? '—'} years</b></span><span><small>Notice period</small><b>{data.notice_days == null ? 'Not provided' : `${data.notice_days} days`}</b></span><span><small>Expected CTC</small><b>{data.expected_ctc_lpa == null ? 'Not provided' : `${data.expected_ctc_lpa} LPA`}</b></span></div><div className="portal-skills">{data.skills.map(skill => <span key={skill}>{skill}</span>)}</div></section>
+    <section className="portal-detail-card"><h2>Top evidence</h2>{data.top_evidence.length ? data.top_evidence.map((item, index) => <div className="portal-evidence" key={`${item.label}-${index}`}><div className="portal-evidence-heading"><b>{item.label}</b><StatusBadge status={item.verdict} /></div><blockquote>{item.quote}</blockquote></div>) : <p className="muted">No verified evidence quotes are available.</p>}</section>
     <section className="portal-detail-card"><h2>Recruiter note</h2><p>{data.recruiter_note || 'No recruiter note was provided.'}</p></section>
     <details className="portal-detail-card portal-redacted-cv"><summary>View redacted CV text</summary><pre>{data.redacted_cv_text}</pre></details>
     {!canReview && <p className="portal-status-note">This candidate is now <StatusBadge status={feedbackStatus || data.status} />.</p>}
@@ -367,7 +367,7 @@ function PortalDetail({ applicationId }: { applicationId: string }) {
   </PortalShell>;
 }
 
-type CalibrationCandidate = { candidate_id: string; candidate_code: string; name: string; current_role: string; score: number | null; band: string | null; stage: string; needs_review: boolean };
+type CalibrationCandidate = { candidate_id: string; candidate_code: string; name: string; current_role: string; score: number | null; band: string | null; score_summary: ScoreSummaryData | null; stage: string; needs_review: boolean };
 type CalibrationRole = { requisition_id: string; title: string; client_name: string; submitted_count: number; top_n: number; overlap_percent: number; submitted_but_ranked_low: CalibrationCandidate[]; ranked_high_not_submitted: CalibrationCandidate[]; client_acceptance_rate: number; needs_review_count: number; overrides: number };
 type AccessEvent = { action: string; created_at: string; user: string; role: string | null; ip?: string | null; user_agent?: string | null };
 function currentIsoWeek() {
@@ -403,7 +403,7 @@ function Insights() {
   </main></Shell>;
 }
 function CandidateCalibrationList({ title, candidates, onAccessLog }: { title: string; candidates: CalibrationCandidate[]; onAccessLog: (id: string) => void }) {
-  return <section className="calibration-list"><h3>{title}</h3>{candidates.length === 0 ? <p className="muted">None</p> : candidates.map(candidate => <article key={candidate.candidate_id}><div><b>{candidate.candidate_code} · {candidate.name}</b><small>{candidate.current_role || 'Candidate'} · {candidate.stage.replaceAll('_', ' ')}</small></div><span>{candidate.score ?? '—'}{candidate.band && <StatusBadge status={candidate.band} />}</span><button type="button" className="secondary" onClick={() => onAccessLog(candidate.candidate_id)}>Access log</button></article>)}</section>;
+  return <section className="calibration-list"><h3>{title}</h3>{candidates.length === 0 ? <p className="muted">None</p> : candidates.map(candidate => <article key={candidate.candidate_id}><div><b>{candidate.candidate_code} · {candidate.name}</b><small>{candidate.current_role || 'Candidate'} · {candidate.stage.replaceAll('_', ' ')}</small></div><ScoreSummary summary={candidate.score_summary} /><button type="button" className="secondary" onClick={() => onAccessLog(candidate.candidate_id)}>Access log</button></article>)}</section>;
 }
 
 function CandidateReview({ id }: { id: string }) {
@@ -433,7 +433,7 @@ function CandidateReview({ id }: { id: string }) {
   if (!data) return null;
   return <Shell><main className="review-main">
     <button type="button" className="link candidate-back" onClick={() => nav(-1)}>← Back to previous screen</button>
-    <PageHeader title={`${data.candidate_code} · ${data.name}`} description={`${data.current_role || 'Candidate'} · ${data.experience ?? '—'} years`} action={<div className="review-summary">{data.score !== null && <><b>{data.score}</b><StatusBadge status={data.band} /></>}<StatusBadge status={data.stage} /></div>} />
+    <PageHeader title={`${data.candidate_code} · ${data.name}`} description={`${data.current_role || 'Candidate'} · ${data.experience ?? '—'} years`} action={<div className="review-summary">{data.score !== null && <ScoreSummary summary={data.score_summary} />}<StatusBadge status={data.stage} /></div>} />
     <p className="consent-status">Consent status <StatusBadge status={data.consent_status || 'pending'} />{data.deleted && <span className="muted">Personal data deleted</span>}</p>
     {data.duplicate_of && <div className="duplicate-banner"><div><b>Possible duplicate</b><p>{data.name} may match {data.duplicate_of.candidate_code} · {data.duplicate_of.name}.</p></div><div><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/merge`, {}, 'Candidate merged.')}>Merge</button><button type="button" className="secondary" disabled={busy} onClick={() => void action(`/candidates/${data.candidate_id}/not-duplicate`, {}, 'Marked as a different candidate.')}>Not a duplicate</button></div></div>}
     {message && <p className="success-message">{message}</p>}{error && <ErrorState message={error} retry={retryAction} />}

@@ -21,6 +21,8 @@ from ..models import (
     User,
 )
 from ..services.pipeline import transition_application, transition_system
+from ..services.evidence import normalize_criteria_evidence
+from ..services.scoring import build_score_summary
 from fastapi import Response
 
 router = APIRouter(tags=["applications"])
@@ -67,6 +69,7 @@ def detail(
     row = _application(db, application_id)
     candidate = _candidate(db, row.candidate_id)
     score = _latest_score(db, row.id)
+    criteria = normalize_criteria_evidence(score.criteria or [], candidate.redacted_text or "") if score else []
     duplicate = db.get(Candidate, candidate.duplicate_of_id) if candidate.duplicate_of_id else None
     db.add(AccessLog(user_id=user.id, candidate_id=candidate.id, action="view_profile"))
     db.commit()
@@ -85,9 +88,10 @@ def detail(
         "raw_text": candidate.raw_text,
         "redacted_text": candidate.redacted_text,
         "scoring_input": score.scoring_input if score else None,
-        "criteria": score.criteria if score else [],
+        "criteria": criteria,
         "score": score.total if score else None,
         "band": score.band if score else None,
+        "score_summary": build_score_summary(score.total if score else None, score.band if score else None, score.criteria or [] if score else []),
         "needs_review": bool(score and score.needs_review),
         "review_reasons": score.review_reasons if score else [],
         "consent_status": candidate.consent_status,

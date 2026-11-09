@@ -128,7 +128,7 @@ h3 { font-size: 15px; }
 .evidence-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .evidence-title .muted { margin-left: auto; font-size: 11px; }
 .evidence-item p { color: #52525b; font-size: 13px; }
-.quote { display: block; width: 100%; min-height: 0; margin: 6px 0; padding: 10px 12px; border: 1px solid #e4e4e7; color: #3f3f46; background: #fafafa; font-weight: 400; text-align: left; white-space: normal; }
+.quote { display: block; width: 100%; min-height: 0; margin: 6px 0; padding: 10px 12px; border: 0; border-left: 3px solid #86efac; color: #3f3f46; background: #f8fafc; font-style: italic; font-weight: 400; text-align: left; white-space: normal; }
 .quote.unverified { border-color: #fde68a; background: #fffbeb; }
 .duplicate-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 0; padding: 14px; border: 1px solid #fde68a; border-radius: var(--radius); background: #fffbeb; }
 .duplicate-banner p { margin: 4px 0 0; color: #78350f; font-size: 13px; }
@@ -217,8 +217,13 @@ h3 { font-size: 15px; }
 .portal-candidate-card h2 { margin: 0; font-size: 15px; }
 .portal-candidate-card p { margin: 0; color: #52525b; font-size: 13px; line-height: 1.5; }
 .portal-summary { padding: 10px; border-radius: 8px; background: #f4f4f5; }
-.portal-candidate-card blockquote { display: grid; gap: 5px; margin: 0; padding: 10px 12px; border-left: 3px solid #86efac; color: #3f3f46; background: #f8fafc; font-size: 12px; line-height: 1.5; }
-.portal-candidate-card blockquote b { font-size: 11px; }
+.portal-list-evidence, .portal-evidence { display: grid; gap: 5px; }
+.portal-list-evidence > b, .portal-evidence-heading b { font-size: 12px; }
+.portal-list-evidence blockquote, .portal-evidence blockquote { margin: 0; padding: 8px 10px; border: 0; border-left: 3px solid #86efac; color: #3f3f46; background: #f8fafc; font-size: 12px; font-style: italic; line-height: 1.5; }
+.score-summary { display: grid; gap: 3px; min-width: 0; }
+.score-summary strong { color: #18181b; font-size: 13px; }
+.score-summary small { color: #71717a; font-size: 11px; line-height: 1.4; }
+.portal-summary .score-summary { width: 100%; }
 .portal-review { width: 100%; margin-top: 2px; }
 .portal-back { min-height: 36px; padding-left: 0 !important; }
 .portal-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 18px; }
@@ -233,10 +238,10 @@ h3 { font-size: 15px; }
 .portal-facts b { font-size: 12px; overflow-wrap: anywhere; }
 .portal-skills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .portal-skills span { padding: 5px 9px; border-radius: 99px; color: #3f3f46; background: #f4f4f5; font-size: 11px; }
-.portal-evidence { display: grid; gap: 8px; margin: 10px 0 0; padding: 12px; border: 1px solid #f4f4f5; border-radius: 9px; background: #fafafa; }
-.portal-evidence b { font-size: 12px; }
-.portal-evidence span { color: #3f3f46; font-size: 13px; line-height: 1.5; }
+.portal-evidence { gap: 7px; margin: 10px 0 0; padding: 10px 12px; border: 1px solid #f4f4f5; border-radius: 9px; background: #fafafa; }
+.portal-evidence-heading { display: flex; align-items: center; gap: 8px; }
 .portal-evidence .badge { width: max-content; }
+.portal-detail-card > .score-summary { margin: 4px 0 12px; }
 .portal-redacted-cv summary { min-height: 24px; color: #3f3f46; font-size: 13px; font-weight: 600; cursor: pointer; }
 .portal-redacted-cv pre { max-height: 320px; overflow: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; background: #fafafa; color: #52525b; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .portal-action-bar { position: fixed; z-index: 4; right: 0; bottom: 0; left: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #e4e4e7; background: #ffffffed; backdrop-filter: blur(10px); }

@@ -4,7 +4,7 @@ from app.ai.mock import MockProvider
 from app.ai.schemas import ScoreResult
 from app.db import SessionLocal
 from app.models import Application, Candidate, CvFile, Requisition, Score, Scorecard
-from app.services.scoring import compute_score
+from app.services.scoring import build_score_summary, compute_score, experience_verdict
 from app.workers.batch_processor import _numeric_verdict, _verify_scoring_evidence
 
 
@@ -30,6 +30,34 @@ def test_numeric_criteria_are_computed_from_profile_and_source_quote():
     location = _numeric_verdict({"id": "location", "kind": "location", "label": "Location", "weight": 1, "params": {}}, candidate, requisition, raw_text)
     assert [experience["verdict"], notice["verdict"], ctc["verdict"], location["verdict"]] == ["partial"] * 4
     assert all(_verify_scoring_evidence(item, raw_text)["evidence"][0]["verified"] for item in (experience, notice, ctc, location))
+
+
+def test_experience_at_one_year_below_minimum_is_partial():
+    candidate = Candidate(total_exp_years=4.0)
+    item = {"id": "experience", "kind": "experience", "label": "Experience", "weight": 3, "params": {"min_years": 5, "max_years": 8}}
+    verdict = _numeric_verdict(item, candidate, Requisition(location="Noida"), "Experience: 4.0 years")
+    assert experience_verdict(4.0, 5.0, 8.0) == "partial"
+    assert verdict["verdict"] == "partial"
+
+
+def test_score_summary_counts_stored_verdicts():
+    summary = build_score_summary(82, "strong", [
+        *[{"verdict": "met"} for _ in range(5)],
+        *[{"verdict": "partial"} for _ in range(2)],
+        {"verdict": "not_met"},
+        {"verdict": "unknown"},
+    ])
+    assert summary == {"score": 82, "band": "strong", "met": 5, "partial": 2, "not_met": 1, "not_stated": 1}
+
+
+def test_mock_evidence_is_the_cv_line_not_only_the_skill_name():
+    provider = MockProvider()
+    criteria = {"criteria": [{"id": "java", "kind": "must_skill", "label": "Java", "weight": 3, "params": {}}]}
+    source_line = "Built Java services for the payments platform and reduced processing latency by 30%."
+    result = asyncio.run(provider.score_cv(f"Experience: 4.0 years\n{source_line}", criteria))
+    quote = result.criteria[0].evidence[0]["quote"]
+    assert quote == source_line
+    assert len(quote) <= 200
 
 
 def test_injection_line_does_not_increase_python_score():
@@ -58,6 +86,8 @@ def test_scoring_input_matches_redacted_text_and_low_scores_stay_searchable(clie
     assert "Smoke Candidate" not in detail["scoring_input"]
     assert "smoke@example.demo" not in detail["scoring_input"]
     assert "+919876543210" not in detail["scoring_input"]
+    assert detail["criteria"][0]["verdict"] == "met"
+    assert detail["criteria"][0]["evidence"][0]["quote"] == "Java Developer"
 
     requisition = db.get(Requisition, application.requisition_id)
     file = db.query(CvFile).filter_by(filename="smoke.pdf").one()

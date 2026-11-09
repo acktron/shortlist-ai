@@ -7,6 +7,7 @@ from ..db import get_db
 from ..deps import require_role
 from ..models import Application, Candidate, ClientFeedback, Requisition, Role, Score, Scorecard, User
 from ..services.pipeline import PIPELINE_STAGES, allowed_transitions
+from ..services.scoring import build_score_summary
 
 router = APIRouter(tags=["pipeline"])
 
@@ -36,6 +37,7 @@ def get_pipeline(
             "experience": float(candidate.total_exp_years) if candidate.total_exp_years is not None else None,
             "score": score.total if score else None,
             "band": score.band if score else None,
+            "score_summary": build_score_summary(score.total if score else None, score.band if score else None, score.criteria or [] if score else []),
             "needs_review": bool(score and score.needs_review),
             "recruiter_opened_at": application.recruiter_opened_at,
             "allowed_transitions": allowed_transitions(db, application, user.role),
