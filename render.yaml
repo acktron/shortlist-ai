@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: shortlist-ai-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_MIN
+        value: "60"
+      - key: AI_MODE
+        value: gemini
+      - key: AI_CONCURRENCY
+        value: "2"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: CORS_ORIGINS
+        sync: false
+      - key: MAX_UPLOAD_MB
+        value: "10"
+      - key: MAX_BATCH_FILES
+        value: "500"

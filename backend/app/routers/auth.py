@@ -1,16 +1,40 @@
 from datetime import datetime,timedelta,timezone
+from collections import defaultdict, deque
 import jwt
-from fastapi import APIRouter,Depends,HTTPException
+from fastapi import APIRouter,Depends,HTTPException,Request
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
+from threading import Lock
+from time import monotonic
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, require_role
 from ..models import User, Role
 from ..schemas.auth import LoginRequest,TokenOut,UserOut
 router=APIRouter(prefix="/auth",tags=["auth"]); pwd=CryptContext(schemes=["bcrypt"],deprecated="auto")
+_login_attempts: dict[str, deque[float]] = defaultdict(deque)
+_login_attempts_lock = Lock()
+_login_rate_limit = 10
+_login_rate_window_seconds = 60
+
+
+def _enforce_login_rate_limit(request: Request) -> None:
+    if settings.env.casefold() != "production":
+        return
+    client_ip = request.client.host if request.client else "unknown"
+    now = monotonic()
+    with _login_attempts_lock:
+        attempts = _login_attempts[client_ip]
+        while attempts and now - attempts[0] >= _login_rate_window_seconds:
+            attempts.popleft()
+        if len(attempts) >= _login_rate_limit:
+            raise HTTPException(status_code=429, detail={"code": "login_rate_limited", "message": "Too many sign-in attempts. Try again shortly."})
+        attempts.append(now)
+
+
 @router.post("/login",response_model=TokenOut)
-def login(data:LoginRequest,db:Session=Depends(get_db)):
+def login(data:LoginRequest,request:Request,db:Session=Depends(get_db)):
+    _enforce_login_rate_limit(request)
     user=db.query(User).filter(User.email==data.email.lower()).first()
     if not user or not pwd.verify(data.password,user.password_hash): raise HTTPException(401,"Invalid email or password")
     token=jwt.encode({"sub":str(user.id),"exp":datetime.now(timezone.utc)+timedelta(minutes=settings.jwt_expires_min)},settings.jwt_secret,algorithm="HS256")

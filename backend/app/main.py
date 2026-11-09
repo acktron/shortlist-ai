@@ -3,7 +3,10 @@ import httpx
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
+from .db import engine
 from .routers.auth import router as auth_router
 from .routers.requisitions import router as requisitions_router
 from .routers.uploads import router as uploads_router
@@ -14,7 +17,7 @@ from .routers.insights import router as insights_router
 from .routers.compliance import router as compliance_router
 from .ai.provider import provider_meta
 from .workers.batch_processor import start_workers,stop_workers
-app=FastAPI(title="ShortlistAI API")
+app=FastAPI(title="ShortlistAI API",debug=False)
 @app.on_event('startup')
 async def start_batch_workers(): await start_workers()
 @app.on_event('shutdown')
@@ -25,6 +28,18 @@ async def http_error(request:Request,exc:HTTPException):
     detail.setdefault('details',{})
     return JSONResponse(status_code=exc.status_code,content={'error':detail})
 log=logging.getLogger(__name__)
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.env.casefold() == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
 @app.on_event('startup')
 async def provider_startup_check():
     if settings.ai_mode=='ollama':
@@ -50,5 +65,12 @@ app.include_router(compliance_router,prefix="/api")
 def meta(): return provider_meta()
 @app.get("/health")
 @app.get("/api/health")
-def health(): return {"status":"ok"}
+def health():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError as exc:
+        log.error("Database health check failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail={"code": "database_unavailable", "message": "Database is unavailable."}) from exc
+    return {"status":"ok", "database":"ok"}
 
